@@ -109,6 +109,157 @@ Examples:
 /**
  * Fallback keyword-based parsing when API is unavailable
  */
+/**
+ * Use AI to analyze and rank search results by relevance
+ * Sends results to OpenAI to score based on how well they match the user's intent
+ */
+export async function rankResultsByRelevance(results, userQuery, maxResults = 50) {
+  if (!OPENAI_API_KEY || !results || results.length === 0) {
+    return { rankedResults: results, explanation: null };
+  }
+
+  // Limit results to avoid token limits
+  const resultsToRank = results.slice(0, maxResults);
+
+  // Create a condensed version of results for the AI
+  const condensedResults = resultsToRank.map((item, index) => ({
+    id: index,
+    title: item.title,
+    summary: item.summary?.substring(0, 500) || '',
+    type: item.type,
+    state: item.state,
+    tags: item.tags
+  }));
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an intelligent content assistant for SchooLinks marketing team. Your job is to help users find the MOST RELEVANT content from their marketing database.
+
+CRITICAL RULES FOR RELEVANCE:
+1. For competitor searches (e.g., "Xello vs SchooLinks", "Naviance alternative"):
+   - ONLY content that EXPLICITLY mentions that exact competitor name in title or summary should rank high
+   - If title/summary contains "Xello" for an Xello search, it's highly relevant
+   - Content about OTHER competitors (Naviance, Levell, etc.) is NOT relevant for an Xello search
+   - "Levell" is a DIFFERENT product than "Xello" - do not confuse them
+
+2. Read the ACTUAL summary text carefully:
+   - Does it mention the specific competitor being searched?
+   - Does the summary content actually relate to the search query?
+
+3. Content types matter:
+   - Landing Pages about a competitor = highest relevance for competitor searches
+   - Customer Stories mentioning the competitor = high relevance
+   - Generic content without competitor mention = low relevance
+
+YOUR RESPONSE FORMAT:
+{
+  "aiResponse": "A helpful 2-3 sentence response directly answering what the user is looking for. Be specific about what you found. Example: 'I found 3 pieces of content specifically comparing SchooLinks to Xello, including a landing page and customer stories. The Xello comparison landing page would be your best resource for competitive positioning.'",
+  "primaryRecommendations": [
+    { "id": 0, "reason": "This is the Xello vs SchooLinks landing page - exactly what you need for competitive comparison" }
+  ],
+  "additionalResources": [
+    { "id": 5, "reason": "While not Xello-specific, this customer story mentions switching from a competitor" }
+  ],
+  "rankedIds": [array of ALL result IDs sorted by relevance],
+  "topMatches": [
+    { "id": 0, "score": 10, "reason": "Directly about Xello comparison" },
+    { "id": 1, "score": 9, "reason": "..." }
+  ]
+}`
+          },
+          {
+            role: 'user',
+            content: `I'm searching for: "${userQuery}"
+
+Here's the content in our database that matched:
+${JSON.stringify(condensedResults, null, 2)}
+
+Please analyze each item's title and summary carefully. Find me the MOST relevant content for my search, and explain your reasoning.`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      console.error('OpenAI ranking API error:', response.status);
+      return { rankedResults: results, explanation: null };
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content;
+
+    if (!content) {
+      return { rankedResults: results, explanation: null };
+    }
+
+    // Parse the JSON response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      console.log('AI ranking result:', parsed);
+
+      // Reorder results based on AI ranking
+      const rankedResults = [];
+      const resultMap = new Map(resultsToRank.map((r, i) => [i, r]));
+
+      // Add ranked results in order
+      for (const id of parsed.rankedIds || []) {
+        if (resultMap.has(id)) {
+          const item = resultMap.get(id);
+          // Find relevance info for this item
+          const matchInfo = parsed.topMatches?.find(m => m.id === id);
+          if (matchInfo) {
+            item._relevanceScore = matchInfo.score;
+            item._relevanceReason = matchInfo.reason;
+          }
+          rankedResults.push(item);
+          resultMap.delete(id);
+        }
+      }
+
+      // Add any remaining results that weren't ranked
+      for (const [, item] of resultMap) {
+        rankedResults.push(item);
+      }
+
+      // Add any results beyond maxResults that weren't sent to AI
+      if (results.length > maxResults) {
+        rankedResults.push(...results.slice(maxResults));
+      }
+
+      return {
+        rankedResults,
+        explanation: parsed.searchSummary,
+        aiResponse: parsed.aiResponse,
+        primaryRecommendations: parsed.primaryRecommendations,
+        additionalResources: parsed.additionalResources,
+        topMatches: parsed.topMatches
+      };
+    }
+
+    return { rankedResults: results, explanation: null };
+
+  } catch (error) {
+    console.error('AI ranking error:', error);
+    return { rankedResults: results, explanation: null };
+  }
+}
+
+/**
+ * Fallback keyword-based parsing when API is unavailable
+ */
 function parseQueryKeywords(naturalQuery, filters) {
   const query = naturalQuery.toLowerCase();
   const words = query.split(/\s+/).filter(w => w.length > 2);

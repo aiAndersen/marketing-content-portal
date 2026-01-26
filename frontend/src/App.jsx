@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
-import { convertNaturalLanguageToQuery } from './services/nlp';
+import { convertNaturalLanguageToQuery, rankResultsByRelevance } from './services/nlp';
 import './App.css';
 
 function App() {
@@ -268,15 +268,43 @@ function App() {
         );
       }
 
+      // Fetch more results for AI ranking (up to 50)
       const { data, error } = await queryBuilder
         .order('last_updated', { ascending: false, nullsFirst: false })
-        .range(0, PAGE_SIZE - 1);
+        .range(0, 49);
 
       if (error) throw error;
 
-      setResults(data || []);
-      setCurrentSearchConfig(searchConfig);
-      setHasMore((data || []).length === PAGE_SIZE);
+      // Use AI to rank results by relevance
+      let finalResults = data || [];
+      let rankingExplanation = null;
+      let topMatches = null;
+
+      if (finalResults.length > 0 && query.trim()) {
+        const rankingResult = await rankResultsByRelevance(finalResults, query);
+        finalResults = rankingResult.rankedResults;
+        rankingExplanation = rankingResult.explanation;
+        topMatches = rankingResult.topMatches;
+
+        // Update AI insight with conversational response
+        if (rankingResult.aiResponse || rankingExplanation) {
+          setAiInsight(prev => ({
+            ...prev,
+            aiResponse: rankingResult.aiResponse,
+            relevanceExplanation: rankingExplanation,
+            primaryRecommendations: rankingResult.primaryRecommendations,
+            additionalResources: rankingResult.additionalResources,
+            topMatches: topMatches
+          }));
+        }
+      }
+
+      setResults(finalResults.slice(0, PAGE_SIZE));
+      setCurrentSearchConfig({
+        ...searchConfig,
+        allResults: finalResults // Store all ranked results for pagination
+      });
+      setHasMore(finalResults.length > PAGE_SIZE);
     } catch (err) {
       setError(err.message);
       console.error('Search error:', err);
@@ -413,7 +441,69 @@ function App() {
                 <Sparkles size={16} />
                 <span>AI Search Assistant</span>
               </div>
-              <p className="ai-understanding">{aiInsight.understanding}</p>
+
+              {/* Conversational AI Response */}
+              {aiInsight.aiResponse && (
+                <div className="ai-conversation">
+                  <p className="ai-response">{aiInsight.aiResponse}</p>
+
+                  {/* Primary Recommendations with Links */}
+                  {aiInsight.primaryRecommendations?.length > 0 && (
+                    <div className="ai-recommendations">
+                      <span className="ai-rec-label">Recommended:</span>
+                      {aiInsight.primaryRecommendations.map((rec, idx) => {
+                        const item = results[rec.id];
+                        if (!item) return null;
+                        return (
+                          <a
+                            key={idx}
+                            href={item.live_link || item.ungated_link || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ai-rec-link"
+                            title={rec.reason}
+                          >
+                            <span className="ai-rec-type">{item.type}</span>
+                            <span className="ai-rec-title">{item.title}</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Additional Resources */}
+                  {aiInsight.additionalResources?.length > 0 && (
+                    <div className="ai-recommendations ai-additional secondary">
+                      <span className="ai-rec-label">Also relevant:</span>
+                      {aiInsight.additionalResources.slice(0, 3).map((rec, idx) => {
+                        const item = results[rec.id];
+                        if (!item) return null;
+                        return (
+                          <a
+                            key={idx}
+                            href={item.live_link || item.ungated_link || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ai-rec-link"
+                            title={rec.reason}
+                          >
+                            <span className="ai-rec-type">{item.type}</span>
+                            <span className="ai-rec-title">{item.title}</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Fallback to basic understanding if no AI response */}
+              {!aiInsight.aiResponse && aiInsight.understanding && (
+                <p className="ai-understanding">{aiInsight.understanding}</p>
+              )}
+
               <div className="ai-details">
                 {aiInsight.correctedQuery !== query && (
                   <span className="ai-tag">Corrected: "{aiInsight.correctedQuery}"</span>
@@ -518,7 +608,16 @@ function App() {
                 <div className="result-header">
                   <span className="result-type">{item.type}</span>
                   {item.state && <span className="result-state">{item.state}</span>}
+                  {item._relevanceScore && (
+                    <span className={`relevance-badge relevance-${item._relevanceScore >= 8 ? 'high' : item._relevanceScore >= 5 ? 'medium' : 'low'}`}>
+                      {item._relevanceScore}/10
+                    </span>
+                  )}
                 </div>
+
+                {item._relevanceReason && (
+                  <p className="relevance-reason">{item._relevanceReason}</p>
+                )}
 
                 <h3 className="result-title">{item.title}</h3>
 
