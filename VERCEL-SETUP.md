@@ -6,7 +6,7 @@ This repository contains two separate Vercel projects:
 
 | Project | Directory | Vercel URL |
 |---------|-----------|------------|
-| Marketing Content Portal | `frontend/` | https://marketing-content-portal.vercel.app |
+| Marketing Content Portal | `frontend/` | https://marekting-content-portal.vercel.app |
 | Content Submission Portal | `content-submission/` | https://content-submission.vercel.app |
 
 ## Critical Configuration
@@ -15,7 +15,7 @@ This repository contains two separate Vercel projects:
 
 Each project must have its **Root Directory** configured in the Vercel dashboard:
 
-- **marketing-content-portal**: Root Directory = `frontend`
+- **marekting-content-portal**: Root Directory = `frontend`
 - **content-submission**: Root Directory = `content-submission`
 
 ### Why This Matters
@@ -33,7 +33,7 @@ sh: line 1: cd: frontend: No such file or directory
 
 ### Marketing Content Portal
 
-1. Go to: https://vercel.com/schoolinks-projects/marketing-content-portal/settings/general
+1. Go to: https://vercel.com/schoolinks-projects/marekting-content-portal/settings/general
 2. Set **Root Directory** to: `frontend`
 3. Click **Save**
 4. Redeploy
@@ -89,7 +89,7 @@ If you need to re-link a project locally:
 ```bash
 # For Marketing Content Portal
 cd frontend
-vercel link --yes --scope schoolinks-projects --project marketing-content-portal
+vercel link --yes --scope schoolinks-projects --project marekting-content-portal
 
 # For Content Submission Portal
 cd content-submission
@@ -108,7 +108,7 @@ Visit the URL provided and enter the code to authenticate.
 
 ## Vercel Project IDs
 
-- **marketing-content-portal**: `prj_JC3P3aEi0AJss0GhEr7J3JnStUAO`
+- **marekting-content-portal**: `prj_JC3P3aEi0AJss0GhEr7J3JnStUAO`
 - **Team/Org ID**: `team_vP41S1hLfP118NhQk4yf1Hqc`
 
 ## Troubleshooting
