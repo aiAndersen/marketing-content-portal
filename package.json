@@ -1,0 +1,11 @@
+{
+  "name": "marketing-content-portal-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:portal": "cd frontend && npm run dev",
+    "dev:submission": "cd content-submission && npx serve -l 3001",
+    "dev": "echo 'Run dev:portal or dev:submission separately'",
+    "deploy": "git add . && git status"
+  }
+}
