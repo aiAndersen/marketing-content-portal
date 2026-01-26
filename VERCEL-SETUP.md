@@ -1,5 +1,16 @@
 # Vercel Deployment Configuration
 
+> **IMPORTANT: Project Name Typo**
+>
+> The Vercel project name has a typo: **`marekting-content-portal`** (not "marketing")
+>
+> This was a mistake when initially setting up the project on Vercel. The typo exists in:
+> - Vercel project name
+> - Vercel URL: https://marekting-content-portal.vercel.app
+> - All CLI commands referencing the project
+>
+> **Always use `marekting` (not `marketing`) when referencing this Vercel project.**
+
 ## Overview
 
 This repository contains two separate Vercel projects:
@@ -108,7 +119,7 @@ Visit the URL provided and enter the code to authenticate.
 
 ## Vercel Project IDs
 
-- **marekting-content-portal**: `prj_JC3P3aEi0AJss0GhEr7J3JnStUAO`
+- **marekting-content-portal**: `prj_YVvShPDpw00hWpyIQmCOlRU4ePRz`
 - **Team/Org ID**: `team_vP41S1hLfP118NhQk4yf1Hqc`
 
 ## Troubleshooting
