@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles } from 'lucide-react';
+import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, MessageSquare, ChevronDown } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
-import { convertNaturalLanguageToQuery, rankResultsByRelevance } from './services/nlp';
+import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
+import ChatInterface from './components/ChatInterface';
 import './App.css';
 
 function App() {
@@ -19,7 +20,12 @@ function App() {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [isViewAll, setIsViewAll] = useState(false);
+  const [isChatMode, setIsChatMode] = useState(true); // Default to chat mode
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [showResultsHint, setShowResultsHint] = useState(false);
   const firstRenderRef = useRef(true);
+  const resultsRef = useRef(null);
 
   const PAGE_SIZE = 100;
 
@@ -282,9 +288,45 @@ function App() {
 
       if (finalResults.length > 0 && query.trim()) {
         const rankingResult = await rankResultsByRelevance(finalResults, query);
-        finalResults = rankingResult.rankedResults;
         rankingExplanation = rankingResult.explanation;
         topMatches = rankingResult.topMatches;
+
+        // Reorder results: primary recommendations first, then additional resources, then rest
+        const primaryRecs = rankingResult.primaryRecommendations || [];
+        const additionalRecs = rankingResult.additionalResources || [];
+        const rankedResults = rankingResult.rankedResults || [];
+
+        // Build ordered results array
+        const orderedResults = [];
+        const usedTitles = new Set();
+
+        // 1. Add primary recommendations first (in order)
+        for (const rec of primaryRecs) {
+          const item = rankedResults.find(r => r.title === rec.title);
+          if (item && !usedTitles.has(item.title)) {
+            orderedResults.push(item);
+            usedTitles.add(item.title);
+          }
+        }
+
+        // 2. Add additional resources next (in order)
+        for (const rec of additionalRecs) {
+          const item = rankedResults.find(r => r.title === rec.title);
+          if (item && !usedTitles.has(item.title)) {
+            orderedResults.push(item);
+            usedTitles.add(item.title);
+          }
+        }
+
+        // 3. Add remaining ranked results
+        for (const item of rankedResults) {
+          if (!usedTitles.has(item.title)) {
+            orderedResults.push(item);
+            usedTitles.add(item.title);
+          }
+        }
+
+        finalResults = orderedResults;
 
         // Update AI insight with conversational response
         if (rankingResult.aiResponse || rankingExplanation) {
@@ -349,6 +391,98 @@ function App() {
     }
   };
 
+  // Handle chat messages
+  const handleChatMessage = async (message) => {
+    // Add user message to history
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: message,
+      timestamp: Date.now()
+    };
+
+    setConversationHistory(prev => [...prev, userMessage]);
+    setChatLoading(true);
+
+    try {
+      // Fetch content if not already loaded
+      let contentForContext = results;
+      if (results.length === 0) {
+        const { data } = await supabaseClient
+          .from('marketing_content')
+          .select('*')
+          .order('last_updated', { ascending: false })
+          .limit(100);
+        contentForContext = data || [];
+        setResults(contentForContext);
+      }
+
+      // Process with conversation context
+      const response = await processConversationalQuery(
+        message,
+        conversationHistory,
+        contentForContext
+      );
+
+      // Add assistant response to history
+      const assistantMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: response.response,
+        recommendations: response.recommendations,
+        followUpQuestions: response.followUpQuestions,
+        aiContent: response.aiContent,
+        timestamp: Date.now()
+      };
+
+      setConversationHistory(prev => [...prev, assistantMessage]);
+
+      // Reorder results to show recommendations first
+      if (response.recommendations?.length > 0) {
+        const recommendations = response.recommendations;
+        const orderedResults = [];
+        const usedTitles = new Set();
+
+        // 1. Add recommended items first (in order)
+        for (const rec of recommendations) {
+          const item = contentForContext.find(r => r.title === rec.title);
+          if (item && !usedTitles.has(item.title)) {
+            orderedResults.push(item);
+            usedTitles.add(item.title);
+          }
+        }
+
+        // 2. Add remaining results
+        for (const item of contentForContext) {
+          if (!usedTitles.has(item.title)) {
+            orderedResults.push(item);
+            usedTitles.add(item.title);
+          }
+        }
+
+        setResults(orderedResults);
+
+        // Show hint to scroll down for results (no auto-scroll)
+        setShowResultsHint(true);
+      }
+
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: "I'm sorry, I encountered an error. Please try again or use the search bar.",
+        timestamp: Date.now()
+      };
+      setConversationHistory(prev => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleClearConversation = () => {
+    setConversationHistory([]);
+  };
 
   const exportToCSV = () => {
     if (results.length === 0) return;
@@ -410,6 +544,49 @@ function App() {
 
       <main className="main">
         <div className="search-container">
+          {/* Mode Toggle */}
+          <div className="search-mode-toggle">
+            <button
+              className={`search-mode-btn ${isChatMode ? 'active' : ''}`}
+              onClick={() => setIsChatMode(true)}
+            >
+              <MessageSquare size={16} />
+              Chat Assistant
+            </button>
+            <button
+              className={`search-mode-btn ${!isChatMode ? 'active' : ''}`}
+              onClick={() => setIsChatMode(false)}
+            >
+              <Search size={16} />
+              Quick Search
+            </button>
+          </div>
+
+          {/* Chat Interface */}
+          {isChatMode && (
+            <ChatInterface
+              conversationHistory={conversationHistory}
+              onSendMessage={handleChatMessage}
+              loading={chatLoading}
+              results={results}
+              onClearConversation={handleClearConversation}
+            />
+          )}
+
+          {/* Results hint alert - shows after chat recommendations */}
+          {isChatMode && showResultsHint && results.length > 0 && (
+            <div
+              className="results-hint"
+              onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              <ChevronDown size={18} />
+              <span>Scroll down to see {results.length} matching results</span>
+              <ChevronDown size={18} />
+            </div>
+          )}
+
+          {/* Traditional Search Form */}
+          {!isChatMode && (
           <form onSubmit={handleSearch} className="search-form">
             <div className="search-input-wrapper">
               <Search className="search-icon" size={20} />
@@ -433,9 +610,10 @@ function App() {
               </button>
             </div>
           </form>
+          )}
 
-          {/* AI Insight Display */}
-          {aiInsight && (
+          {/* AI Insight Display - only in search mode */}
+          {!isChatMode && aiInsight && (
             <div className="ai-insight">
               <div className="ai-insight-header">
                 <Sparkles size={16} />
@@ -447,12 +625,13 @@ function App() {
                 <div className="ai-conversation">
                   <p className="ai-response">{aiInsight.aiResponse}</p>
 
-                  {/* Primary Recommendations with Links */}
+                  {/* Primary Recommendations with Links - using title-based lookup */}
                   {aiInsight.primaryRecommendations?.length > 0 && (
                     <div className="ai-recommendations">
                       <span className="ai-rec-label">Recommended:</span>
                       {aiInsight.primaryRecommendations.map((rec, idx) => {
-                        const item = results[rec.id];
+                        // Find by title instead of index to avoid mismatch after ranking
+                        const item = results.find(r => r.title === rec.title);
                         if (!item) return null;
                         return (
                           <a
@@ -472,12 +651,13 @@ function App() {
                     </div>
                   )}
 
-                  {/* Additional Resources */}
+                  {/* Additional Resources - using title-based lookup */}
                   {aiInsight.additionalResources?.length > 0 && (
                     <div className="ai-recommendations ai-additional secondary">
                       <span className="ai-rec-label">Also relevant:</span>
                       {aiInsight.additionalResources.slice(0, 3).map((rec, idx) => {
-                        const item = results[rec.id];
+                        // Find by title instead of index to avoid mismatch after ranking
+                        const item = results.find(r => r.title === rec.title);
                         if (!item) return null;
                         return (
                           <a
@@ -521,6 +701,8 @@ function App() {
             </div>
           )}
 
+          {/* Filters - only in search mode */}
+          {!isChatMode && (
           <div className={`filters ${filtersOpen ? 'is-open' : 'is-collapsed'}`}>
             <div className="filters-header">
               <button
@@ -578,6 +760,7 @@ function App() {
             </div>
             </div>
           </div>
+          )}
 
           {error && (
             <div className="error">
@@ -586,7 +769,7 @@ function App() {
           )}
         </div>
 
-        <div className="results-container">
+        <div className="results-container" ref={resultsRef}>
           <div className="results-header">
             <h2>
               {results.length > 0
