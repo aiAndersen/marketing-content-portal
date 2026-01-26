@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submit Content | SchoolLinks Marketing Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page-layout">
+    <!-- Compact Header -->
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">
+          <img src="assets/schoolinks-logo-white.png" alt="SchooLinks" class="logo-image">
+        </div>
+        <span class="header-divider">|</span>
+        <span class="header-subtitle">Content Submission</span>
+      </div>
+    </header>
+
+    <!-- Success Message (Hidden by default) -->
+    <div id="success-message" class="success-message hidden">
+      <div class="success-icon">✅</div>
+      <h2>Content Submitted!</h2>
+      <p>Your content has been added to the marketing portal.</p>
+      <button onclick="resetForm()" class="btn btn-primary">Submit Another</button>
+    </div>
+
+    <!-- Main Content - Two Column Layout -->
+    <main id="main-content" class="main-content">
+      <!-- Left Column: AI Assistant -->
+      <section class="ai-panel">
+        <div class="ai-assistant" id="ai-assistant">
+          <div class="ai-header">
+            <div class="ai-title">
+              <span class="ai-icon">✨</span>
+              <h2>AI Assistant</h2>
+            </div>
+            <p class="ai-subtitle">Paste a URL or describe your content</p>
+          </div>
+
+          <div id="chat-messages" class="chat-messages">
+            <!-- Messages appended here -->
+          </div>
+
+          <div class="chat-input-wrapper">
+            <textarea
+              id="ai-input"
+              class="chat-input"
+              placeholder="Paste a YouTube link, HubSpot URL, or describe the content..."
+              rows="3"
+            ></textarea>
+            <div class="file-upload">
+              <label class="file-label" for="ai-file">Upload PDF to auto-fill</label>
+              <input id="ai-file" type="file" accept=".pdf,application/pdf">
+            </div>
+            <div class="input-actions">
+              <button id="voice-btn" class="btn-icon btn-voice" type="button" title="Voice input">
+                <span class="mic-icon">🎤</span>
+              </button>
+              <button id="parse-btn" class="btn btn-primary btn-parse" type="button">
+                <span id="parse-text">Analyze</span>
+                <span id="parse-loading" class="hidden">
+                  <span class="spinner"></span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview Section -->
+          <div id="preview-section" class="preview-section hidden">
+            <div class="preview-header">
+              <h3>Extracted Data</h3>
+              <span class="preview-hint">Edit before applying</span>
+            </div>
+            <div id="preview-fields" class="preview-fields"></div>
+            <div class="preview-actions">
+              <button id="apply-fields" class="btn btn-primary" type="button">Apply to Form</button>
+              <button id="clear-preview" class="btn btn-ghost" type="button">Clear</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Form -->
+      <section class="form-panel">
+        <form id="content-form" class="content-form">
+          <!-- Row 1: Type & Platform -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="type">Content Type *</label>
+              <select id="type" name="type" required>
+                <option value="">Select...</option>
+                <option value="Blog">Blog</option>
+                <option value="Video">Video</option>
+                <option value="Video Clip">Video Clip</option>
+                <option value="Customer Story">Customer Story</option>
+                <option value="1 Pager">1 Pager</option>
+                <option value="Ebook">Ebook</option>
+                <option value="Webinar">Webinar</option>
+                <option value="Press Release">Press Release</option>
+                <option value="Award">Award</option>
+                <option value="Landing Page">Landing Page</option>
+                <option value="Asset">Asset</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="platform">Platform *</label>
+              <select id="platform" name="platform" required>
+                <option value="">Select...</option>
+                <option value="Website">Website</option>
+                <option value="YouTube">YouTube</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="HubSpot">HubSpot</option>
+                <option value="Email">Email</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row 2: Title -->
+          <div class="form-group">
+            <label for="title">Title *</label>
+            <input type="text" id="title" name="title" placeholder="Content title" required>
+          </div>
+
+          <!-- Row 3: Links -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="live_link">Live Link *</label>
+              <input type="url" id="live_link" name="live_link" placeholder="https://schoolinks.com/..." required>
+            </div>
+            <div class="form-group">
+              <label for="ungated_link">Ungated Link</label>
+              <input type="url" id="ungated_link" name="ungated_link" placeholder="Direct download URL">
+            </div>
+          </div>
+
+          <!-- Row 4: State & Tags -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="state">State/Region</label>
+              <select id="state" name="state">
+                <option value="">National</option>
+                <option value="National">National</option>
+                <option value="AL">Alabama</option>
+                <option value="AK">Alaska</option>
+                <option value="AZ">Arizona</option>
+                <option value="AR">Arkansas</option>
+                <option value="CA">California</option>
+                <option value="CO">Colorado</option>
+                <option value="CT">Connecticut</option>
+                <option value="DE">Delaware</option>
+                <option value="FL">Florida</option>
+                <option value="GA">Georgia</option>
+                <option value="HI">Hawaii</option>
+                <option value="ID">Idaho</option>
+                <option value="IL">Illinois</option>
+                <option value="IN">Indiana</option>
+                <option value="IA">Iowa</option>
+                <option value="KS">Kansas</option>
+                <option value="KY">Kentucky</option>
+                <option value="LA">Louisiana</option>
+                <option value="ME">Maine</option>
+                <option value="MD">Maryland</option>
+                <option value="MA">Massachusetts</option>
+                <option value="MI">Michigan</option>
+                <option value="MN">Minnesota</option>
+                <option value="MS">Mississippi</option>
+                <option value="MO">Missouri</option>
+                <option value="MT">Montana</option>
+                <option value="NE">Nebraska</option>
+                <option value="NV">Nevada</option>
+                <option value="NH">New Hampshire</option>
+                <option value="NJ">New Jersey</option>
+                <option value="NM">New Mexico</option>
+                <option value="NY">New York</option>
+                <option value="NC">North Carolina</option>
+                <option value="ND">North Dakota</option>
+                <option value="OH">Ohio</option>
+                <option value="OK">Oklahoma</option>
+                <option value="OR">Oregon</option>
+                <option value="PA">Pennsylvania</option>
+                <option value="RI">Rhode Island</option>
+                <option value="SC">South Carolina</option>
+                <option value="SD">South Dakota</option>
+                <option value="TN">Tennessee</option>
+                <option value="TX">Texas</option>
+                <option value="UT">Utah</option>
+                <option value="VT">Vermont</option>
+                <option value="VA">Virginia</option>
+                <option value="WA">Washington</option>
+                <option value="WV">West Virginia</option>
+                <option value="WI">Wisconsin</option>
+                <option value="WY">Wyoming</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="tags">Tags</label>
+              <input type="text" id="tags" name="tags" placeholder="college, career, students">
+            </div>
+          </div>
+
+          <!-- Row 5: Summary -->
+          <div class="form-group">
+            <label for="summary">Summary *</label>
+            <textarea id="summary" name="summary" rows="3" placeholder="Brief description (2-3 sentences)" required></textarea>
+          </div>
+
+          <!-- Submit -->
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-submit">
+              <span id="submit-text">Submit Content</span>
+              <span id="submit-loading" class="hidden">
+                <span class="spinner"></span> Submitting...
+              </span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="config.js"></script>
+  <script src="ai-assistant.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
