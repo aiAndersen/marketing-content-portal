@@ -16,6 +16,11 @@
         </div>
         <span class="header-divider">|</span>
         <span class="header-subtitle">Content Submission</span>
+        <nav class="header-nav">
+          <button class="nav-tab active" data-tab="submit" onclick="switchTab('submit')">Submit Content</button>
+          <button class="nav-tab" data-tab="reports" onclick="switchTab('reports')">Reports</button>
+          <button class="nav-tab" data-tab="edit" onclick="switchTab('edit')">Edit Content</button>
+        </nav>
       </div>
     </header>
 
@@ -221,6 +226,185 @@
         </form>
       </section>
     </main>
+
+    <!-- Reports Section (Hidden by default) -->
+    <section id="reports-section" class="reports-section hidden">
+      <div class="reports-container">
+        <h2>Submission Reports</h2>
+        <p class="reports-subtitle">View content submissions by time period with type and platform breakdowns</p>
+
+        <div class="reports-filters">
+          <div class="quick-filters">
+            <button class="quick-filter-btn active" onclick="loadReportPeriod('last30')">Last 30 Days</button>
+            <button class="quick-filter-btn" onclick="loadReportPeriod('annual')">This Year</button>
+            <button class="quick-filter-btn" onclick="loadReportPeriod('all')">All Time</button>
+          </div>
+          <div class="custom-filter">
+            <span class="filter-label">Custom:</span>
+            <input type="date" id="report-date-from" class="date-input">
+            <span>to</span>
+            <input type="date" id="report-date-to" class="date-input">
+            <button class="btn btn-sm" onclick="loadReport()">Apply</button>
+          </div>
+          <button id="export-csv-btn" class="btn btn-ghost" onclick="exportReportCSV()" disabled>
+            📥 Export CSV
+          </button>
+        </div>
+
+        <div class="reports-summary" id="reports-summary">
+          <!-- Summary stats appear here -->
+        </div>
+
+        <div class="reports-breakdown" id="reports-breakdown">
+          <!-- Type/Platform/State breakdown appears here -->
+        </div>
+
+        <div class="reports-table-wrapper">
+          <table class="reports-table" id="reports-table">
+            <thead>
+              <tr>
+                <th>Submitted</th>
+                <th>Type</th>
+                <th>Title</th>
+                <th>State</th>
+                <th>Platform</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody id="reports-tbody">
+              <tr class="empty-row">
+                <td colspan="6">Click a time period above to load submissions</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Edit Content Section (Hidden by default) -->
+    <section id="edit-section" class="edit-section hidden">
+      <div class="edit-container">
+        <h2>Edit Content</h2>
+        <p class="edit-subtitle">Search, edit, or delete content from the database</p>
+
+        <div class="edit-search">
+          <input type="text" id="edit-search-input" placeholder="Search by title, type, or tags..." class="search-input">
+          <select id="edit-type-filter" class="filter-select">
+            <option value="">All Types</option>
+            <option value="Blog">Blog</option>
+            <option value="Video">Video</option>
+            <option value="Video Clip">Video Clip</option>
+            <option value="Customer Story">Customer Story</option>
+            <option value="1 Pager">1 Pager</option>
+            <option value="Ebook">Ebook</option>
+            <option value="Webinar">Webinar</option>
+            <option value="Press Release">Press Release</option>
+            <option value="Award">Award</option>
+            <option value="Landing Page">Landing Page</option>
+            <option value="Asset">Asset</option>
+          </select>
+          <button class="btn btn-primary" onclick="searchContent()">Search</button>
+        </div>
+
+        <div class="edit-results" id="edit-results">
+          <p class="edit-hint">Enter a search term or select a type filter to find content</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Edit Content</h3>
+          <button class="modal-close" onclick="closeEditModal()">×</button>
+        </div>
+        <form id="edit-form" onsubmit="saveContentEdit(event)">
+          <input type="hidden" id="edit-id">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-type">Type</label>
+              <select id="edit-type" name="type" required>
+                <option value="Blog">Blog</option>
+                <option value="Video">Video</option>
+                <option value="Video Clip">Video Clip</option>
+                <option value="Customer Story">Customer Story</option>
+                <option value="1 Pager">1 Pager</option>
+                <option value="Ebook">Ebook</option>
+                <option value="Webinar">Webinar</option>
+                <option value="Press Release">Press Release</option>
+                <option value="Award">Award</option>
+                <option value="Landing Page">Landing Page</option>
+                <option value="Asset">Asset</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-platform">Platform</label>
+              <select id="edit-platform" name="platform">
+                <option value="Website">Website</option>
+                <option value="YouTube">YouTube</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="HubSpot">HubSpot</option>
+                <option value="Email">Email</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-title">Title</label>
+            <input type="text" id="edit-title" name="title" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-live-link">Live Link</label>
+              <input type="url" id="edit-live-link" name="live_link">
+            </div>
+            <div class="form-group">
+              <label for="edit-ungated-link">Ungated Link</label>
+              <input type="url" id="edit-ungated-link" name="ungated_link">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-state">State</label>
+              <input type="text" id="edit-state" name="state" placeholder="e.g., TX, CA">
+            </div>
+            <div class="form-group">
+              <label for="edit-tags">Tags</label>
+              <input type="text" id="edit-tags" name="tags">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-summary">Summary</label>
+            <textarea id="edit-summary" name="summary" rows="3"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-danger" onclick="deleteContent()">Delete</button>
+            <div class="modal-actions-right">
+              <button type="button" class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal hidden">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>Confirm Delete</h3>
+          <button class="modal-close" onclick="closeDeleteModal()">×</button>
+        </div>
+        <p>Are you sure you want to delete "<span id="delete-title"></span>"?</p>
+        <p class="delete-warning">This action cannot be undone.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+          <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

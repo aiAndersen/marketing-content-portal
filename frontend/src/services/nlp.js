@@ -202,10 +202,17 @@ ${SCHOOLINKS_CONTEXT}
 
 RELEVANCE RULES:
 1. For competitor searches (e.g., "Xello vs SchooLinks", "Naviance alternative"):
-   - ONLY content that EXPLICITLY mentions that exact competitor name in title or summary should rank high
-   - Content about OTHER competitors is NOT relevant (Levell ≠ Xello)
-   - Landing Pages comparing competitors = highest relevance
-   - Customer Stories mentioning the competitor = high relevance
+   - ONLY content that EXPLICITLY mentions that EXACT competitor name should be recommended
+   - Naviance content is NOT relevant to Xello searches - these are DIFFERENT competitors
+   - Xello content is NOT relevant to Naviance searches
+   - Each competitor is DISTINCT - NEVER cross-recommend (showing Naviance for Xello search is WRONG)
+   - Check the title AND tags for the competitor name
+   - If NO content exists for the searched competitor:
+     a) Clearly state in aiResponse: "We don't have specific [competitor] comparison content yet"
+     b) DO NOT substitute with other competitor content
+     c) Optionally mention: "We do have [other competitor] comparisons if that would be helpful"
+   - Landing Pages comparing that SPECIFIC competitor = highest relevance
+   - Customer Stories mentioning that SPECIFIC competitor = high relevance
 
 2. For persona searches (e.g., "content for counselors"):
    - Match content addressing that persona's pain points and needs
@@ -216,6 +223,15 @@ RELEVANCE RULES:
    - Include related feature content
 
 4. Read the ACTUAL summary text carefully - does it truly match the search intent?
+
+5. For state-specific searches (e.g., "Florida content", "Texas customer stories"):
+   - PRIORITIZE content from the requested state - these should ALWAYS be listed first in recommendations
+   - If you recommend content from a DIFFERENT state, you MUST:
+     a) Clearly state in aiResponse: "While we only have one Florida story, here are similar examples from other states..."
+     b) Include the state in the reason: "From Nevada - similar WBL implementation approach"
+     c) Explain WHY it's relevant despite being from a different state
+   - NEVER present different-state content as if it's from the requested state
+   - If NO content exists for the requested state, clearly say so: "We don't have any [STATE] content yet, but here are relevant examples from similar states..."
 
 CRITICAL: Your response must use EXACT TITLES from the content list. Do not paraphrase or modify titles.
 
@@ -411,7 +427,7 @@ export async function processConversationalQuery(
   userMessage,
   conversationHistory,
   availableContent,
-  maxContentForContext = 50
+  maxContentForContext = 100
 ) {
   if (!OPENAI_API_KEY) {
     return {
@@ -420,10 +436,11 @@ export async function processConversationalQuery(
     };
   }
 
-  // Create content summary for context (titles and types only to save tokens)
-  const contentSummary = availableContent.slice(0, maxContentForContext).map(c =>
-    `- "${c.title}" (${c.type}${c.state ? ', ' + c.state : ''})`
-  ).join('\n');
+  // Create content summary for context (include summary + tags for better matching)
+  const contentSummary = availableContent.slice(0, maxContentForContext).map(c => {
+    const summary = c.summary ? ` - ${c.summary.substring(0, 200)}...` : '';
+    return `- "${c.title}" (${c.type}${c.state ? ', ' + c.state : ''}${c.tags ? ', Tags: ' + c.tags : ''})${summary}`;
+  }).join('\n');
 
   // Build conversation messages for OpenAI
   const messages = [
@@ -436,7 +453,7 @@ ${SCHOOLINKS_CONTEXT}
 AVAILABLE CONTENT IN DATABASE:
 ${contentSummary}
 
-YOUR RESPONSE FORMAT (JSON):
+YOUR RESPONSE FORMAT (MUST BE VALID JSON):
 {
   "response": "Your conversational response. Be helpful, specific, and demonstrate SchooLinks knowledge. Reference exact content titles when recommending.",
   "recommendations": [
@@ -445,17 +462,38 @@ YOUR RESPONSE FORMAT (JSON):
   "followUpQuestions": ["Actionable search prompt 1", "Actionable search prompt 2"]
 }
 
+CRITICAL: You MUST respond with valid JSON. The recommendations array is REQUIRED.
+- If you find ANY matching content, it MUST be in the recommendations array
+- 1-5 recommendations is ideal
+- An empty array [] is ONLY acceptable if truly NO content matches
+- Always include at least 1 recommendation if any content is even remotely relevant
+
 IMPORTANT RULES:
-1. Use EXACT titles from the available content list - do not paraphrase
+1. Use EXACT titles from the available content list - COPY THE TITLE EXACTLY, character for character
 2. Remember previous messages in the conversation and build on them
 3. If user says "more like that" or "something different", reference prior context
-4. Limit recommendations to 3-5 most relevant items
+4. Include 1-5 recommendations - even 1 matching item should be recommended
 5. Follow safety rails: don't claim exact district counts or numbers not provided
 6. Be conversational and helpful, not robotic
 7. followUpQuestions MUST be ACTIONABLE SEARCH PROMPTS that help find more content - NOT consultative questions
    - GOOD: "Show me Naviance videos", "Any Texas districts?", "Customer stories from Ohio", "Videos about FAFSA completion"
    - BAD: "What challenges are you facing?", "What features do you need?", "What's your district size?"
-   - These should help users narrow/expand results, filter by content type or state, or explore related topics`
+   - These should help users narrow/expand results, filter by content type or state, or explore related topics
+
+8. COMPETITOR SEARCHES - CRITICAL:
+   - Search the available content for items that mention the EXACT competitor in title, summary, or Tags
+   - If you find content tagged with the competitor (e.g., "Tags: Xello"), ALWAYS recommend it
+   - Naviance content is NOT relevant to Xello searches - these are DIFFERENT competitors
+   - Each competitor is distinct - if user asks for Xello, only show Xello-related content
+   - Even if there's only ONE matching item, still recommend it with a clickable link
+   - If truly NO content mentions the competitor, say so - but double-check the Tags field first
+
+9. STATE-SPECIFIC SEARCHES - CRITICAL:
+   - When user asks for content from a specific state (e.g., "Florida stories"), PRIORITIZE that state's content
+   - If recommending content from OTHER states, you MUST clearly indicate this in your response
+   - Example: "I found one Florida story. I'm also showing Nevada and Ohio examples that demonstrate similar approaches."
+   - NEVER imply different-state content is from the requested state
+   - If no content exists for requested state, say: "We don't have [STATE] content yet, but here are relevant examples from other states..."`
     },
     // Include conversation history (last 8 messages to stay within token limits)
     ...conversationHistory.slice(-8).map(msg => ({
