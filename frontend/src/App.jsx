@@ -218,6 +218,7 @@ function App() {
       }
 
       // Merge AI-detected filters with user-selected filters
+      // AI handles spelling correction for state names (e.g., "virginai" -> VA)
       const mergedTypes = [...new Set([...selectedTypes, ...(aiParams.types || [])])];
       const allStates = [...new Set([...selectedStates, ...(aiParams.states || [])])];
 
@@ -253,7 +254,48 @@ function App() {
 
       // Apply comprehensive keyword search across ALL columns (including enriched data)
       // AI has already prioritized search terms and filtered out noise words based on SchooLinks context
-      if (aiParams.searchTerms && aiParams.searchTerms.length > 0) {
+
+      // IMPORTANT: When the primary intent is "state" and we have state filters applied,
+      // we ONLY filter by state - don't also search for state names as keywords.
+      // This prevents "virginia content" from returning TX content that mentions "virginia" in text.
+      const isStateSpecificSearch = aiParams.primaryIntent === 'state' && allStates.length > 0;
+
+      if (isStateSpecificSearch) {
+        // State-specific search: ONLY filter by state, don't add keyword conditions
+        // The state filter is already applied above via queryBuilder.in('state', allStates)
+        console.log('[Search] State-specific search for:', allStates, '- using strict state filter only');
+
+        // If there are additional non-state search terms (like "videos", "counselors"), apply those
+        const nonStateTerms = (aiParams.searchTerms || []).filter(term => {
+          const t = term.toLowerCase();
+          // Filter out state names and generic terms
+          const stateNames = ['alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado',
+            'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana',
+            'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan',
+            'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire',
+            'new jersey', 'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma',
+            'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee',
+            'texas', 'utah', 'vermont', 'virginia', 'washington', 'west virginia', 'wisconsin', 'wyoming'];
+          const genericTerms = ['content', 'stuff', 'things', 'resources', 'materials'];
+          return !stateNames.includes(t) && !genericTerms.includes(t);
+        });
+
+        if (nonStateTerms.length > 0) {
+          console.log('[Search] Additional non-state terms:', nonStateTerms);
+          const searchConditions = nonStateTerms.flatMap(term => {
+            const t = term.toLowerCase();
+            return [
+              `title.ilike.%${t}%`,
+              `summary.ilike.%${t}%`,
+              `enhanced_summary.ilike.%${t}%`,
+              `tags.ilike.%${t}%`,
+              `auto_tags.ilike.%${t}%`,
+              `extracted_text.ilike.%${t}%`
+            ];
+          });
+          queryBuilder = queryBuilder.or(searchConditions.join(','));
+        }
+      } else if (aiParams.searchTerms && aiParams.searchTerms.length > 0) {
         console.log('[Search] AI-prioritized terms:', aiParams.searchTerms, 'Intent:', aiParams.primaryIntent || 'general');
 
         // Build search conditions for each term across all text columns

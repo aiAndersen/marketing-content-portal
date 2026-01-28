@@ -7,6 +7,94 @@
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
 /**
+ * Autocorrect common misspellings before AI processing
+ * Uses Levenshtein distance for fuzzy matching
+ */
+const AUTOCORRECT_DICTIONARY = {
+  // US States (common misspellings)
+  'virginai': 'virginia', 'virgina': 'virginia', 'virgnia': 'virginia', 'viriginia': 'virginia',
+  'californa': 'california', 'califronia': 'california', 'californai': 'california', 'cali': 'california',
+  'texs': 'texas', 'teaxs': 'texas', 'texsa': 'texas',
+  'flordia': 'florida', 'flroida': 'florida', 'florda': 'florida',
+  'ohoi': 'ohio', 'ohi': 'ohio',
+  'illinios': 'illinois', 'ilinois': 'illinois', 'illnois': 'illinois',
+  'michgan': 'michigan', 'michagan': 'michigan', 'michign': 'michigan',
+  'pensylvania': 'pennsylvania', 'pennslvania': 'pennsylvania', 'pennsylania': 'pennsylvania',
+  'georgai': 'georgia', 'goergia': 'georgia',
+  'arizon': 'arizona', 'arizonia': 'arizona',
+  'minesota': 'minnesota', 'minnisota': 'minnesota',
+  'wisconson': 'wisconsin', 'wisconsn': 'wisconsin',
+  'tennesee': 'tennessee', 'tennesse': 'tennessee',
+  'missour': 'missouri', 'misouri': 'missouri',
+  'louisianna': 'louisiana', 'lousiana': 'louisiana',
+  'massachusets': 'massachusetts', 'massachussetts': 'massachusetts',
+  'conneticut': 'connecticut', 'conecticut': 'connecticut',
+  'oregn': 'oregon', 'oregan': 'oregon',
+  'colorad': 'colorado', 'colordo': 'colorado',
+  'kentuckey': 'kentucky', 'kentucy': 'kentucky',
+  'alabma': 'alabama', 'alabamam': 'alabama',
+  'missisippi': 'mississippi', 'mississipi': 'mississippi',
+  'indianna': 'indiana', 'indana': 'indiana',
+  'nevade': 'nevada', 'nevad': 'nevada',
+  'oklahom': 'oklahoma', 'oaklahoma': 'oklahoma',
+  'arkasas': 'arkansas', 'arkensas': 'arkansas',
+  'iow': 'iowa', 'iwoa': 'iowa',
+  'kansa': 'kansas', 'kanasas': 'kansas',
+  'nebreska': 'nebraska', 'nebraksa': 'nebraska',
+  'utahh': 'utah',
+  'mainee': 'maine', 'miane': 'maine',
+  'deleware': 'delaware', 'delawre': 'delaware',
+  'vermot': 'vermont', 'vermnt': 'vermont',
+  'hawai': 'hawaii', 'hawii': 'hawaii',
+  'alask': 'alaska', 'alsaka': 'alaska',
+  'idahoo': 'idaho', 'idho': 'idaho',
+  'montanaa': 'montana', 'motana': 'montana',
+  'wyomin': 'wyoming', 'wyomng': 'wyoming',
+  // Competitors
+  'navience': 'naviance', 'naviannce': 'naviance', 'navance': 'naviance',
+  'xelo': 'xello', 'zelo': 'xello', 'xcello': 'xello',
+  'majorclairty': 'majorclarity', 'major clarity': 'majorclarity',
+  'powerschol': 'powerschool', 'power school': 'powerschool',
+  // Common terms
+  'councelor': 'counselor', 'counsler': 'counselor', 'counselers': 'counselors', 'counsleors': 'counselors',
+  'vidoe': 'video', 'viedo': 'video', 'vidoes': 'videos',
+  'custome': 'customer', 'cusotmer': 'customer',
+  'storie': 'story', 'storeis': 'stories',
+  'graduaton': 'graduation', 'gradution': 'graduation',
+  'colege': 'college', 'collge': 'college',
+  'caree': 'career', 'carreer': 'career',
+  'contnet': 'content', 'conent': 'content',
+  'comparsion': 'comparison', 'comparision': 'comparison',
+};
+
+/**
+ * Apply autocorrect to a query string
+ * @param {string} query - The raw query
+ * @returns {string} - Corrected query
+ */
+function autocorrectQuery(query) {
+  if (!query) return query;
+
+  let corrected = query.toLowerCase();
+  let hasCorrections = false;
+
+  // Check each word against dictionary
+  for (const [misspelling, correction] of Object.entries(AUTOCORRECT_DICTIONARY)) {
+    const regex = new RegExp(`\\b${misspelling}\\b`, 'gi');
+    if (regex.test(corrected)) {
+      corrected = corrected.replace(regex, correction);
+      hasCorrections = true;
+    }
+  }
+
+  if (hasCorrections) {
+    console.log(`[Autocorrect] "${query}" -> "${corrected}"`);
+  }
+
+  return corrected;
+}
+
+/**
  * SchooLinks Context for AI Prompts
  * Condensed from SL_baseline_context_AIAgents.md
  */
@@ -63,9 +151,12 @@ SAFETY RAILS (don't overclaim):
  * Use OpenAI to understand and enhance the search query
  */
 export async function convertNaturalLanguageToQuery(naturalQuery, filters = {}) {
+  // Apply autocorrect before AI processing
+  const correctedQuery = autocorrectQuery(naturalQuery);
+
   if (!OPENAI_API_KEY) {
     console.log('No OpenAI API key, using basic keyword search');
-    return parseQueryKeywords(naturalQuery, filters);
+    return parseQueryKeywords(correctedQuery, filters);
   }
 
   try {
@@ -108,12 +199,17 @@ IMPORTANT: When a competitor is mentioned, terms like "comparison", "vs", "Schoo
 Return a JSON object:
 {
   "types": ["array of content types to filter by"],
-  "states": ["array of state abbreviations"],
+  "states": ["array of US state ABBREVIATIONS like TX, CA, VA, NY - ALWAYS include if a state is mentioned or implied, even with typos"],
   "searchTerms": ["PRIORITIZED keywords - most important first, exclude noise words"],
   "correctedQuery": "the query with spelling fixed",
   "understanding": "brief explanation of what you understood",
   "primaryIntent": "competitor|state|persona|topic|general - what is the user primarily looking for?"
 }
+
+CRITICAL - STATE DETECTION:
+- ALWAYS detect US states even with misspellings: "virginai" → states: ["VA"], "texs" → states: ["TX"], "flordia" → states: ["FL"]
+- Return the 2-letter abbreviation: Virginia=VA, Texas=TX, California=CA, New York=NY, Ohio=OH, Florida=FL, Illinois=IL, etc.
+- When a state is detected, primaryIntent should be "state" unless a competitor is also mentioned
 
 CONTENT TYPE DISAMBIGUATION:
 - "Video" = full-length videos, tutorials, demos, recorded webinars
@@ -127,11 +223,20 @@ Examples:
 - "customer stories from Texas" → types: ["Customer Story"], states: ["TX"], searchTerms: [], primaryIntent: "state"
 - "videos about college" → types: ["Video"], searchTerms: ["college"], primaryIntent: "topic"
 - "content for counselors in california" → states: ["CA"], searchTerms: ["counselors"], primaryIntent: "persona"
-- "FAFSA completion resources" → searchTerms: ["fafsa", "completion"], primaryIntent: "topic"`
+- "FAFSA completion resources" → searchTerms: ["fafsa", "completion"], primaryIntent: "topic"
+- "virginia content" → states: ["VA"], searchTerms: [], primaryIntent: "state" (NOT searchTerms: ["virginia", "content"])
+- "virginai content" → states: ["VA"], searchTerms: [], primaryIntent: "state" (detect even with typo!)
+- "texs videos" → states: ["TX"], types: ["Video"], searchTerms: [], primaryIntent: "state"
+- "content from ohio" → states: ["OH"], searchTerms: [], primaryIntent: "state"
+- "flordia customer stories" → states: ["FL"], types: ["Customer Story"], searchTerms: [], primaryIntent: "state"
+- "new york customer stories" → types: ["Customer Story"], states: ["NY"], searchTerms: [], primaryIntent: "state"
+- "califronia content" → states: ["CA"], searchTerms: [], primaryIntent: "state"
+
+IMPORTANT: When primaryIntent is "state", do NOT include state names or generic words like "content", "stuff", "resources" in searchTerms. The state filter handles the geographic targeting.`
           },
           {
             role: 'user',
-            content: `Parse this search query: "${naturalQuery}"`
+            content: `Parse this search query: "${correctedQuery}"`
           }
         ],
         temperature: 0.3,
