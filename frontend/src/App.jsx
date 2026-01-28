@@ -218,8 +218,14 @@ function App() {
       }
 
       // Merge AI-detected filters with user-selected filters
-      const allTypes = [...new Set([...selectedTypes, ...(aiParams.types || [])])];
+      const mergedTypes = [...new Set([...selectedTypes, ...(aiParams.types || [])])];
       const allStates = [...new Set([...selectedStates, ...(aiParams.states || [])])];
+
+      // Validate that AI-detected types are valid content types
+      const allTypes = mergedTypes.filter(type => contentTypes.includes(type));
+      if (mergedTypes.length !== allTypes.length) {
+        console.warn('Invalid content types filtered out:', mergedTypes.filter(t => !contentTypes.includes(t)));
+      }
 
       const searchConfig = {
         types: allTypes,
@@ -245,7 +251,7 @@ function App() {
         queryBuilder = queryBuilder.in('state', allStates);
       }
 
-      // Apply comprehensive keyword search across ALL columns
+      // Apply comprehensive keyword search across ALL columns (including enriched data)
       if (aiParams.searchTerms && aiParams.searchTerms.length > 0) {
         // Build search conditions for each term across all text columns
         const searchConditions = aiParams.searchTerms.flatMap(term => {
@@ -253,8 +259,11 @@ function App() {
           return [
             `title.ilike.%${t}%`,
             `summary.ilike.%${t}%`,
+            `enhanced_summary.ilike.%${t}%`,
             `platform.ilike.%${t}%`,
             `tags.ilike.%${t}%`,
+            `auto_tags.ilike.%${t}%`,
+            `extracted_text.ilike.%${t}%`,
             `type.ilike.%${t}%`,
             `state.ilike.%${t}%`
           ];
@@ -262,13 +271,16 @@ function App() {
 
         queryBuilder = queryBuilder.or(searchConditions.join(','));
       } else if (searchConfig.useRawQueryFallback) {
-        // Fallback: search all columns with the raw query
+        // Fallback: search all columns with the raw query (including enriched data)
         const searchTerm = query.trim().toLowerCase();
         queryBuilder = queryBuilder.or(
           `title.ilike.%${searchTerm}%,` +
           `summary.ilike.%${searchTerm}%,` +
+          `enhanced_summary.ilike.%${searchTerm}%,` +
           `platform.ilike.%${searchTerm}%,` +
           `tags.ilike.%${searchTerm}%,` +
+          `auto_tags.ilike.%${searchTerm}%,` +
+          `extracted_text.ilike.%${searchTerm}%,` +
           `state.ilike.%${searchTerm}%,` +
           `type.ilike.%${searchTerm}%`
         );
@@ -318,12 +330,41 @@ function App() {
           }
         }
 
-        // 3. Add remaining ranked results
-        for (const item of rankedResults) {
-          if (!usedTitles.has(item.title)) {
-            orderedResults.push(item);
-            usedTitles.add(item.title);
+        // 3. Add remaining ranked results, but sort them by keyword relevance first
+        // Identify "primary" search terms (competitors) vs generic terms
+        const searchTermsLower = (aiParams.searchTerms || []).map(t => t.toLowerCase());
+        const primaryTerms = searchTermsLower.filter(t =>
+          ['xello', 'naviance', 'scoir', 'majorcla', 'powersch', 'levelall'].some(c => t.includes(c))
+        );
+        const remainingItems = rankedResults.filter(item => !usedTitles.has(item.title));
+
+        // Score remaining items - give MUCH higher weight to primary term matches
+        const scoredRemaining = remainingItems.map(item => {
+          let score = 0;
+          const titleLower = (item.title || '').toLowerCase();
+          const tagsLower = (item.tags || '').toLowerCase();
+          const autoTagsLower = (item.auto_tags || '').toLowerCase();
+          const allText = titleLower + ' ' + tagsLower + ' ' + autoTagsLower;
+
+          // Primary terms (competitors) get HUGE boost - 100 points
+          for (const term of primaryTerms) {
+            if (allText.includes(term)) score += 100;
           }
+
+          // Regular search terms get normal scoring
+          for (const term of searchTermsLower) {
+            if (titleLower.includes(term)) score += 10;
+            if (tagsLower.includes(term)) score += 5;
+            if (autoTagsLower.includes(term)) score += 5;
+          }
+          return { item, score };
+        });
+
+        // Sort by score descending, then add to results
+        scoredRemaining.sort((a, b) => b.score - a.score);
+        for (const { item } of scoredRemaining) {
+          orderedResults.push(item);
+          usedTitles.add(item.title);
         }
 
         finalResults = orderedResults;
@@ -405,17 +446,96 @@ function App() {
     setChatLoading(true);
 
     try {
-      // Fetch content if not already loaded
-      let contentForContext = results;
-      if (results.length === 0) {
-        const { data } = await supabaseClient
+      // First, parse the query to extract search terms
+      const aiParams = await convertNaturalLanguageToQuery(message, {});
+      const searchTerms = aiParams.searchTerms || [];
+
+      // Build a search query to find relevant content
+      let queryBuilder = supabaseClient
+        .from('marketing_content')
+        .select('*');
+
+      // Apply keyword search to find relevant content (including enriched fields)
+      if (searchTerms.length > 0) {
+        const searchConditions = searchTerms.flatMap(term => {
+          const t = term.toLowerCase();
+          return [
+            `title.ilike.%${t}%`,
+            `summary.ilike.%${t}%`,
+            `enhanced_summary.ilike.%${t}%`,
+            `tags.ilike.%${t}%`,
+            `auto_tags.ilike.%${t}%`,
+            `extracted_text.ilike.%${t}%`
+          ];
+        });
+        queryBuilder = queryBuilder.or(searchConditions.join(','));
+      }
+
+      const { data } = await queryBuilder
+        .order('last_updated', { ascending: false })
+        .limit(100);
+
+      let contentForContext = data || [];
+
+      // CRITICAL: Filter out wrong competitors when searching for a specific competitor
+      // If searching for Xello, exclude ALL Naviance content (and vice versa)
+      const searchTermsLower = searchTerms.map(t => t.toLowerCase());
+      const isXelloSearch = searchTermsLower.some(t => t.includes('xello'));
+      const isNavianceSearch = searchTermsLower.some(t => t.includes('naviance'));
+
+      console.log('[Chat] Competitor detection:', { isXelloSearch, isNavianceSearch, searchTerms });
+      const beforeFilterCount = contentForContext.length;
+
+      if (isXelloSearch && !isNavianceSearch) {
+        // STRICT: When searching for Xello, ONLY keep Xello-related content
+        // First, identify all Xello-specific content
+        const xelloContent = contentForContext.filter(item => {
+          const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
+          return allText.includes('xello');
+        });
+
+        // If we have Xello content, use ONLY that (no general content mixing in)
+        if (xelloContent.length > 0) {
+          console.log(`[Chat] Found ${xelloContent.length} Xello-specific items - using ONLY these`);
+          contentForContext = xelloContent;
+        } else {
+          // Fallback: at least exclude Naviance content
+          contentForContext = contentForContext.filter(item => {
+            const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
+            return !allText.includes('naviance');
+          });
+        }
+        console.log(`[Chat] Filtered for Xello: ${beforeFilterCount} -> ${contentForContext.length} items`);
+      } else if (isNavianceSearch && !isXelloSearch) {
+        // STRICT: When searching for Naviance, ONLY keep Naviance-related content
+        const navianceContent = contentForContext.filter(item => {
+          const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
+          return allText.includes('naviance');
+        });
+
+        if (navianceContent.length > 0) {
+          console.log(`[Chat] Found ${navianceContent.length} Naviance-specific items - using ONLY these`);
+          contentForContext = navianceContent;
+        } else {
+          contentForContext = contentForContext.filter(item => {
+            const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
+            return !allText.includes('xello');
+          });
+        }
+        console.log(`[Chat] Filtered for Naviance: ${beforeFilterCount} -> ${contentForContext.length} items`);
+      }
+
+      // If no specific matches, fall back to recent content
+      if (contentForContext.length === 0) {
+        const { data: fallbackData } = await supabaseClient
           .from('marketing_content')
           .select('*')
           .order('last_updated', { ascending: false })
           .limit(100);
-        contentForContext = data || [];
-        setResults(contentForContext);
+        contentForContext = fallbackData || [];
       }
+
+      setResults(contentForContext);
 
       // Process with conversation context
       const response = await processConversationalQuery(
@@ -424,12 +544,23 @@ function App() {
         contentForContext
       );
 
-      // Add assistant response to history
+      // CRITICAL: Filter AI recommendations to only include items that exist in our filtered content
+      // This prevents Naviance content from appearing when searching for Xello
+      const validRecommendations = (response.recommendations || []).filter(rec => {
+        const exists = contentForContext.some(item => item.title === rec.title);
+        if (!exists) {
+          console.log('[Chat] Filtering out invalid recommendation (not in filtered results):', rec.title);
+        }
+        return exists;
+      });
+      console.log(`[Chat] Valid recommendations: ${validRecommendations.length} of ${(response.recommendations || []).length}`);
+
+      // Add assistant response to history with ONLY valid recommendations
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: response.response,
-        recommendations: response.recommendations,
+        recommendations: validRecommendations,
         followUpQuestions: response.followUpQuestions,
         aiContent: response.aiContent,
         timestamp: Date.now()
@@ -452,12 +583,42 @@ function App() {
           }
         }
 
-        // 2. Add remaining results
-        for (const item of contentForContext) {
-          if (!usedTitles.has(item.title)) {
-            orderedResults.push(item);
-            usedTitles.add(item.title);
+        // 2. Add remaining results, sorted by keyword relevance
+        // First, identify "primary" search terms (competitors/specific keywords) vs generic terms
+        const primaryTerms = searchTerms.filter(t =>
+          ['xello', 'naviance', 'scoir', 'majorcla', 'powersch', 'levelall'].some(c => t.toLowerCase().includes(c))
+        );
+        const remainingItems = contentForContext.filter(item => !usedTitles.has(item.title));
+
+        // Score remaining items - give MUCH higher weight to primary term matches
+        const scoredRemaining = remainingItems.map(item => {
+          let score = 0;
+          const titleLower = (item.title || '').toLowerCase();
+          const tagsLower = (item.tags || '').toLowerCase();
+          const autoTagsLower = (item.auto_tags || '').toLowerCase();
+          const allText = titleLower + ' ' + tagsLower + ' ' + autoTagsLower;
+
+          // Primary terms (competitors) get HUGE boost - 100 points
+          for (const term of primaryTerms) {
+            const t = term.toLowerCase();
+            if (allText.includes(t)) score += 100;
           }
+
+          // Regular search terms get normal scoring
+          for (const term of searchTerms) {
+            const t = term.toLowerCase();
+            if (titleLower.includes(t)) score += 10;
+            if (tagsLower.includes(t)) score += 5;
+            if (autoTagsLower.includes(t)) score += 5;
+          }
+          return { item, score };
+        });
+
+        // Sort by score descending
+        scoredRemaining.sort((a, b) => b.score - a.score);
+        for (const { item } of scoredRemaining) {
+          orderedResults.push(item);
+          usedTitles.add(item.title);
         }
 
         setResults(orderedResults);

@@ -106,11 +106,21 @@ Return a JSON object with these fields:
   "understanding": "brief explanation of what you understood"
 }
 
+CONTENT TYPE DISAMBIGUATION:
+- "Video" = full-length videos, tutorials, demos, recorded webinars
+- "Video Clip" = short clips, snippets, teasers, highlights (use ONLY when user says "clip", "clips", "short video", or "snippet")
+- IMPORTANT: If query contains "clip" or "clips", use ONLY "Video Clip" type, NOT "Video"
+- If query just says "videos" without "clip", use ONLY "Video" type
+
 Examples:
 - "costumer storys from texs" → types: ["Customer Story"], states: ["TX"], searchTerms: ["customer", "story", "texas"]
-- "videos about college" → types: ["Video", "Video Clip"], searchTerms: ["college", "higher education", "university"]
+- "videos about college" → types: ["Video"], searchTerms: ["college", "higher education", "university"]
+- "video clips about Xello" → types: ["Video Clip"], searchTerms: ["xello", "competitor"]
+- "short videos" → types: ["Video Clip"], searchTerms: []
+- "Xello clips" → types: ["Video Clip"], searchTerms: ["xello", "competitor"]
 - "content for counselors in california" → states: ["CA"], searchTerms: ["counselor", "counselors", "guidance"]
-- "nevada schools" → states: ["NV"], searchTerms: ["school", "schools", "education", "district"]`
+- "nevada schools" → states: ["NV"], searchTerms: ["school", "schools", "education", "district"]
+- "customer videos" → types: ["Video"], searchTerms: ["customer", "testimonial"]`
           },
           {
             role: 'user',
@@ -176,12 +186,15 @@ export async function rankResultsByRelevance(results, userQuery, maxResults = 50
   const resultsToRank = results.slice(0, maxResults);
 
   // Create a condensed version of results for the AI - using title as primary identifier
+  // Include enriched data (enhanced_summary, auto_tags) for better relevance matching
   const condensedResults = resultsToRank.map((item) => ({
     title: item.title,
     type: item.type,
     state: item.state,
-    summary: item.summary?.substring(0, 400) || '',
-    tags: item.tags
+    // Prefer enhanced_summary if available, otherwise use original summary
+    summary: (item.enhanced_summary || item.summary || '').substring(0, 400),
+    // Combine original tags with AI-generated auto_tags for comprehensive matching
+    tags: [item.tags, item.auto_tags].filter(Boolean).join(', ')
   }));
 
   try {
@@ -233,6 +246,20 @@ RELEVANCE RULES:
    - NEVER present different-state content as if it's from the requested state
    - If NO content exists for the requested state, clearly say so: "We don't have any [STATE] content yet, but here are relevant examples from similar states..."
 
+6. For content type searches (e.g., "video clips", "customer stories"):
+   - "Video Clip" is DISTINCT from "Video" - clips are short snippets, videos are full-length
+   - If user asks for "video clips", ONLY recommend items with type="Video Clip"
+   - If user asks for "videos" (without "clip"), recommend type="Video" items
+   - Use tags as supporting evidence: if tags include "clip", "short", "snippet" = likely a clip
+   - NEVER recommend a "Video" when user specifically asked for "Video Clip" or "clips"
+
+7. TAGS CONTAIN RICH METADATA from AI content analysis:
+   - Tags may include: competitor names mentioned in the content (Naviance, Xello, etc.)
+   - Tags may include: personas addressed (counselors, administrators, CTE coordinators)
+   - Tags may include: topics covered (FAFSA, graduation, work-based learning, career exploration)
+   - Tags may include: content format hints (testimonial, demo, tutorial, customer-story)
+   - USE TAGS to validate content relevance - if user searches for "Naviance" and tags include "Naviance", it's highly relevant
+
 CRITICAL: Your response must use EXACT TITLES from the content list. Do not paraphrase or modify titles.
 
 YOUR RESPONSE FORMAT:
@@ -250,6 +277,12 @@ YOUR RESPONSE FORMAT:
   ]
 }
 
+IMPORTANT - RECOMMENDATION QUANTITIES:
+- primaryRecommendations: Include 3-5 items that BEST match the search intent. These are the "must-see" resources.
+- additionalResources: Include 5-10 more items that are also relevant. These provide comprehensive options.
+- If fewer high-quality matches exist, only include what's truly relevant. Quality over quantity.
+- The user will see these recommendations prominently in the chat assistant interface.
+
 Be conversational and demonstrate SchooLinks product knowledge. If the user searches for competitor content, explain how SchooLinks differentiates.`
           },
           {
@@ -263,7 +296,7 @@ Please analyze each item's title and summary carefully. Find me the MOST relevan
           }
         ],
         temperature: 0.3,
-        max_tokens: 2500
+        max_tokens: 3500
       })
     });
 
@@ -340,10 +373,11 @@ function parseQueryKeywords(naturalQuery, filters) {
   const words = query.split(/\s+/).filter(w => w.length > 2);
 
   // Content type detection with common misspellings
+  // Note: Video Clip patterns are checked separately with priority
   const typePatterns = {
     'Customer Story': ['customer', 'story', 'stories', 'case', 'study', 'costumer', 'custimer'],
-    'Video': ['video', 'videos', 'vido', 'vidoe', 'film', 'watch'],
-    'Video Clip': ['clip', 'clips', 'short', 'shorts'],
+    'Video': ['video', 'videos', 'vido', 'vidoe', 'film', 'watch', 'tutorial', 'demo'],
+    'Video Clip': ['clip', 'clips', 'short video', 'shorts', 'snippet', 'snippets', 'teaser', 'highlight'],
     'Blog': ['blog', 'blogs', 'article', 'articles', 'post'],
     'Ebook': ['ebook', 'ebooks', 'e-book', 'book', 'guide', 'whitepaper'],
     'Webinar': ['webinar', 'webinars', 'webiner', 'webniar', 'presentation'],
@@ -353,6 +387,10 @@ function parseQueryKeywords(naturalQuery, filters) {
     'Landing Page': ['landing', 'page', 'lp'],
     'Asset': ['asset', 'assets', 'resource', 'resources']
   };
+
+  // Priority rule: "clip" keywords take precedence over generic "video"
+  const clipKeywords = ['clip', 'clips', 'snippet', 'snippets', 'teaser', 'highlight', 'short video'];
+  const hasClipKeyword = clipKeywords.some(k => query.includes(k));
 
   // State detection with full names and common misspellings
   const statePatterns = {
@@ -394,6 +432,10 @@ function parseQueryKeywords(naturalQuery, filters) {
   const detectedTypes = [];
   for (const [type, patterns] of Object.entries(typePatterns)) {
     if (patterns.some(p => query.includes(p))) {
+      // Priority rule: if "clip" keywords present, skip generic "Video" type
+      if (type === 'Video' && hasClipKeyword) {
+        continue; // Don't add Video when user asked for clips
+      }
       detectedTypes.push(type);
     }
   }
@@ -436,10 +478,16 @@ export async function processConversationalQuery(
     };
   }
 
-  // Create content summary for context (include summary + tags for better matching)
+  // Create content summary for context (include summary + all tags for better matching)
+  // Use enriched data (enhanced_summary, auto_tags) when available
   const contentSummary = availableContent.slice(0, maxContentForContext).map(c => {
-    const summary = c.summary ? ` - ${c.summary.substring(0, 200)}...` : '';
-    return `- "${c.title}" (${c.type}${c.state ? ', ' + c.state : ''}${c.tags ? ', Tags: ' + c.tags : ''})${summary}`;
+    // Prefer enhanced_summary, fall back to original summary
+    const summaryText = c.enhanced_summary || c.summary || '';
+    const summary = summaryText ? ` - ${summaryText.substring(0, 250)}` : '';
+    // Combine both original tags and AI-generated auto_tags
+    const allTags = [c.tags, c.auto_tags].filter(Boolean).join(', ');
+    const tagsStr = allTags ? `, Tags: ${allTags}` : '';
+    return `- "${c.title}" (${c.type}${c.state ? ', ' + c.state : ''}${tagsStr})${summary}`;
   }).join('\n');
 
   // Build conversation messages for OpenAI
@@ -463,30 +511,30 @@ YOUR RESPONSE FORMAT (MUST BE VALID JSON):
 }
 
 CRITICAL: You MUST respond with valid JSON. The recommendations array is REQUIRED.
-- If you find ANY matching content, it MUST be in the recommendations array
-- 1-5 recommendations is ideal
+
+**RECOMMENDATION RULES:**
+- Include 5-10 recommendations for comprehensive coverage
+- For competitor searches: prioritize comparison guides, competitive positioning content, and customer stories
+- Match recommendations to the user's specific intent (e.g., "comparisons" = comparison guides first)
 - An empty array [] is ONLY acceptable if truly NO content matches
-- Always include at least 1 recommendation if any content is even remotely relevant
 
 IMPORTANT RULES:
-1. Use EXACT titles from the available content list - COPY THE TITLE EXACTLY, character for character
-2. Remember previous messages in the conversation and build on them
-3. If user says "more like that" or "something different", reference prior context
-4. Include 1-5 recommendations - even 1 matching item should be recommended
+1. Use EXACT titles from the available content list - COPY THE TITLE EXACTLY
+2. Match the user's query intent - "comparison" queries → comparison guides first, "video" queries → videos first
+3. Remember previous messages in the conversation and build on them
+4. If user says "more like that" or "something different", reference prior context
 5. Follow safety rails: don't claim exact district counts or numbers not provided
 6. Be conversational and helpful, not robotic
-7. followUpQuestions MUST be ACTIONABLE SEARCH PROMPTS that help find more content - NOT consultative questions
-   - GOOD: "Show me Naviance videos", "Any Texas districts?", "Customer stories from Ohio", "Videos about FAFSA completion"
-   - BAD: "What challenges are you facing?", "What features do you need?", "What's your district size?"
-   - These should help users narrow/expand results, filter by content type or state, or explore related topics
+7. followUpQuestions MUST be ACTIONABLE SEARCH PROMPTS that help find more content
+   - GOOD: "Show me Xello videos", "Any Texas districts?", "Customer stories about Xello"
+   - BAD: "What challenges are you facing?", "What features do you need?"
 
-8. COMPETITOR SEARCHES - CRITICAL:
-   - Search the available content for items that mention the EXACT competitor in title, summary, or Tags
-   - If you find content tagged with the competitor (e.g., "Tags: Xello"), ALWAYS recommend it
-   - Naviance content is NOT relevant to Xello searches - these are DIFFERENT competitors
-   - Each competitor is distinct - if user asks for Xello, only show Xello-related content
-   - Even if there's only ONE matching item, still recommend it with a clickable link
-   - If truly NO content mentions the competitor, say so - but double-check the Tags field first
+8. COMPETITOR SEARCHES - IMPORTANT:
+   - The available content has been pre-filtered to competitor-relevant items
+   - Recommend 5-10 items that BEST match the user's specific query
+   - For "comparison" queries → prioritize comparison guides, competitive overviews
+   - For "video" queries → prioritize video clips and videos
+   - For "customer story" queries → prioritize customer stories and case studies
 
 9. STATE-SPECIFIC SEARCHES - CRITICAL:
    - When user asks for content from a specific state (e.g., "Florida stories"), PRIORITIZE that state's content
