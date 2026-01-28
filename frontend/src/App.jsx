@@ -491,18 +491,49 @@ function App() {
     setChatLoading(true);
 
     try {
-      // First, parse the query to extract search terms
+      // First, parse the query to extract search terms and states
       const aiParams = await convertNaturalLanguageToQuery(message, {});
       const searchTerms = aiParams.searchTerms || [];
+      const detectedStates = aiParams.states || [];
+      const primaryIntent = aiParams.primaryIntent || 'general';
+
+      console.log('[Chat] AI params:', { searchTerms, detectedStates, primaryIntent });
 
       // Build a search query to find relevant content
       let queryBuilder = supabaseClient
         .from('marketing_content')
         .select('*');
 
+      // IMPORTANT: Apply state filter FIRST if states were detected
+      // This ensures state-specific searches return ONLY that state's content
+      if (detectedStates.length > 0) {
+        console.log('[Chat] Applying state filter:', detectedStates);
+        queryBuilder = queryBuilder.in('state', detectedStates);
+      }
+
       // Apply keyword search to find relevant content (including enriched fields)
-      if (searchTerms.length > 0) {
-        const searchConditions = searchTerms.flatMap(term => {
+      // BUT skip state names as keywords when primaryIntent is 'state'
+      const isStateSearch = primaryIntent === 'state' && detectedStates.length > 0;
+      const filteredSearchTerms = isStateSearch
+        ? searchTerms.filter(t => !Object.values({
+            'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+            'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+            'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+            'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+            'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+            'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+            'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+            'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+            'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+            'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+            'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+            'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+            'wisconsin': 'WI', 'wyoming': 'WY'
+          }).includes(t.toLowerCase()) && !['content', 'stuff', 'resources'].includes(t.toLowerCase()))
+        : searchTerms;
+
+      if (filteredSearchTerms.length > 0) {
+        const searchConditions = filteredSearchTerms.flatMap(term => {
           const t = term.toLowerCase();
           return [
             `title.ilike.%${t}%`,
