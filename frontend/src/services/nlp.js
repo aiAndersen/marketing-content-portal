@@ -67,6 +67,23 @@ const AUTOCORRECT_DICTIONARY = {
   'comparsion': 'comparison', 'comparision': 'comparison',
 };
 
+// State name to abbreviation mapping for direct detection
+const STATE_NAME_TO_ABBREV = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+  'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+  'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+  'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+  'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+  'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+  'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+  'wisconsin': 'WI', 'wyoming': 'WY'
+};
+
 /**
  * Apply autocorrect to a query string
  * @param {string} query - The raw query
@@ -92,6 +109,33 @@ function autocorrectQuery(query) {
   }
 
   return corrected;
+}
+
+/**
+ * Detect if query contains a US state name and return the abbreviation
+ * @param {string} query - The query string
+ * @returns {string|null} - State abbreviation or null
+ */
+function detectStateInQuery(query) {
+  if (!query) return null;
+  const queryLower = query.toLowerCase().trim();
+
+  // Check for exact state name match or state name in query
+  for (const [stateName, abbrev] of Object.entries(STATE_NAME_TO_ABBREV)) {
+    if (queryLower === stateName || queryLower.includes(stateName)) {
+      console.log(`[State Detection] Found "${stateName}" -> ${abbrev}`);
+      return abbrev;
+    }
+  }
+
+  // Check for state abbreviations (2 uppercase letters)
+  const abbrevMatch = query.match(/\b([A-Z]{2})\b/);
+  if (abbrevMatch && Object.values(STATE_NAME_TO_ABBREV).includes(abbrevMatch[1])) {
+    console.log(`[State Detection] Found abbreviation ${abbrevMatch[1]}`);
+    return abbrevMatch[1];
+  }
+
+  return null;
 }
 
 /**
@@ -263,13 +307,27 @@ IMPORTANT: When primaryIntent is "state", do NOT include state names or generic 
       const parsed = JSON.parse(jsonMatch[0]);
       console.log('AI parsed query:', parsed);
 
+      // FALLBACK: If AI didn't detect a state, try direct detection from query
+      let detectedStates = parsed.states || [];
+      let primaryIntent = parsed.primaryIntent || 'general';
+
+      if (detectedStates.length === 0) {
+        const directState = detectStateInQuery(correctedQuery);
+        if (directState) {
+          console.log(`[Fallback] AI missed state, using direct detection: ${directState}`);
+          detectedStates = [directState];
+          primaryIntent = 'state';
+        }
+      }
+
       // Merge with user-selected filters
       return {
         types: [...new Set([...(parsed.types || []), ...(filters.types || [])])],
-        states: [...new Set([...(parsed.states || []), ...(filters.states || [])])],
+        states: [...new Set([...detectedStates, ...(filters.states || [])])],
         searchTerms: parsed.searchTerms || [],
-        correctedQuery: parsed.correctedQuery || naturalQuery,
-        understanding: parsed.understanding || ''
+        correctedQuery: parsed.correctedQuery || correctedQuery,
+        understanding: parsed.understanding || '',
+        primaryIntent: primaryIntent
       };
     }
 
