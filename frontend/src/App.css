@@ -1108,6 +1108,103 @@ body {
   white-space: nowrap;
 }
 
+/* New card-style recommendation styles */
+.chat-rec-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.8rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--sl-marina);
+  margin-bottom: var(--spacing-sm);
+}
+
+.chat-rec-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.chat-rec-card {
+  background: white;
+  border: 1px solid var(--sl-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.chat-rec-card:hover {
+  border-color: var(--sl-marina);
+  box-shadow: 0 2px 8px rgba(0, 115, 173, 0.15);
+}
+
+.chat-rec-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.chat-rec-state {
+  background: var(--sl-baby-blue);
+  color: var(--sl-marina);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.65rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.chat-rec-card-title {
+  font-weight: var(--font-weight-semibold);
+  font-size: 0.9rem;
+  color: var(--sl-black);
+  margin-bottom: var(--spacing-xs);
+  line-height: 1.3;
+}
+
+.chat-rec-card-reason {
+  font-size: 0.75rem;
+  color: var(--sl-gray-500);
+  margin-bottom: var(--spacing-sm);
+  font-style: italic;
+}
+
+.chat-rec-card-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.chat-rec-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  background: var(--sl-gray-100);
+  color: var(--sl-gray-700);
+  border: 1px solid var(--sl-gray-300);
+}
+
+.chat-rec-action-btn:hover {
+  background: var(--sl-gray-200);
+}
+
+.chat-rec-action-btn.primary {
+  background: var(--sl-marina);
+  color: white;
+  border-color: var(--sl-marina);
+}
+
+.chat-rec-action-btn.primary:hover {
+  background: #005a8c;
+}
+
 .chat-follow-ups {
   display: flex;
   flex-wrap: wrap;

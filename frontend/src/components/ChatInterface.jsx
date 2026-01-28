@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, User, ExternalLink, RefreshCw } from 'lucide-react';
+import { Send, Sparkles, User, ExternalLink, RefreshCw, FileText, Download } from 'lucide-react';
 
 /**
  * ChatInterface Component
@@ -11,6 +11,7 @@ function ChatInterface({
   onSendMessage,
   loading,
   results,
+  contentDatabase,  // Full content database for recommendation lookups
   onClearConversation
 }) {
   const [inputValue, setInputValue] = useState('');
@@ -107,25 +108,55 @@ function ChatInterface({
               {/* Render recommendations for assistant messages */}
               {message.role === 'assistant' && message.recommendations?.length > 0 && (
                 <div className="chat-recommendations">
-                  {message.recommendations.map((rec, idx) => {
-                    // Find item by title
-                    const item = results.find(r => r.title === rec.title);
-                    if (!item) return null;
-                    return (
-                      <a
-                        key={idx}
-                        href={item.live_link || item.ungated_link || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="chat-rec-link"
-                        title={rec.reason}
-                      >
-                        <span className="chat-rec-type">{item.type}</span>
-                        <span className="chat-rec-title">{item.title}</span>
-                        <ExternalLink size={12} />
-                      </a>
-                    );
-                  })}
+                  <span className="chat-rec-header">
+                    <FileText size={14} />
+                    Recommended Content ({message.recommendations.length})
+                  </span>
+                  <div className="chat-rec-grid">
+                    {message.recommendations.map((rec, idx) => {
+                      // Find item by title - check both results and full database
+                      const item = results.find(r => r.title === rec.title) ||
+                                   (contentDatabase || []).find(r => r.title === rec.title);
+                      if (!item) {
+                        console.log('[Chat] Recommendation not found:', rec.title);
+                        return null;
+                      }
+                      return (
+                        <div key={idx} className="chat-rec-card">
+                          <div className="chat-rec-card-header">
+                            <span className="chat-rec-type">{item.type}</span>
+                            {item.state && <span className="chat-rec-state">{item.state}</span>}
+                          </div>
+                          <div className="chat-rec-card-title">{item.title}</div>
+                          {rec.reason && (
+                            <div className="chat-rec-card-reason">{rec.reason}</div>
+                          )}
+                          <div className="chat-rec-card-actions">
+                            {item.live_link && (
+                              <a
+                                href={item.live_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="chat-rec-action-btn primary"
+                              >
+                                View Live <ExternalLink size={12} />
+                              </a>
+                            )}
+                            {item.ungated_link && (
+                              <a
+                                href={item.ungated_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="chat-rec-action-btn"
+                              >
+                                <Download size={12} /> Download
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

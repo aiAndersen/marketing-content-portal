@@ -806,6 +806,7 @@ function App() {
               onSendMessage={handleChatMessage}
               loading={chatLoading}
               results={results}
+              contentDatabase={results}
               onClearConversation={handleClearConversation}
             />
           )}
