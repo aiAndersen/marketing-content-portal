@@ -252,7 +252,10 @@ function App() {
       }
 
       // Apply comprehensive keyword search across ALL columns (including enriched data)
+      // AI has already prioritized search terms and filtered out noise words based on SchooLinks context
       if (aiParams.searchTerms && aiParams.searchTerms.length > 0) {
+        console.log('[Search] AI-prioritized terms:', aiParams.searchTerms, 'Intent:', aiParams.primaryIntent || 'general');
+
         // Build search conditions for each term across all text columns
         const searchConditions = aiParams.searchTerms.flatMap(term => {
           const t = term.toLowerCase();

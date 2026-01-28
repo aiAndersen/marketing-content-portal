@@ -80,47 +80,54 @@ export async function convertNaturalLanguageToQuery(naturalQuery, filters = {}) 
         messages: [
           {
             role: 'system',
-            content: `You are a search query parser for a marketing content database. Your job is to understand what the user is looking for and extract structured search parameters.
+            content: `You are a search query parser for SchooLinks marketing content database. Your job is to understand what the user is looking for and extract structured search parameters WITH INTELLIGENT PRIORITIZATION.
 
-The database contains marketing content with these columns:
+${SCHOOLINKS_CONTEXT}
+
+DATABASE COLUMNS:
 - type: Content type (Customer Story, Video, Blog, Ebook, Webinar, 1-Pager, Press Release, Award, Landing Page, Asset, Video Clip)
 - title: Content title
 - summary: Description of the content
 - platform: Where it's hosted (Website, YouTube, LinkedIn, HubSpot, etc.)
 - state: US State abbreviation (TX, CA, NY, FL, etc.) or "National"
 - tags: Keywords like "college, career, counselors, students, work-based learning"
+- auto_tags: AI-generated tags including competitor mentions, personas, topics
 
-IMPORTANT RULES:
-1. Fix misspellings (e.g., "costumer" → "customer", "vido" → "video", "texs" → "texas")
-2. Understand synonyms (e.g., "case study" = "customer story", "film" = "video")
-3. Recognize state names and convert to abbreviations (e.g., "texas" → "TX", "california" → "CA")
-4. Extract relevant keywords for searching content
-5. Be generous with search terms - include variations and related words
+SEARCH PRIORITY REASONING (CRITICAL):
+You must analyze the query and determine which terms are MOST IMPORTANT for finding relevant content.
 
-Return a JSON object with these fields:
+Priority Hierarchy (highest to lowest):
+1. COMPETITOR NAMES (Xello, Naviance, Scoir, MajorClarity, PowerSchool, Kuder, YouScience) - When mentioned, this is almost always the PRIMARY intent. User wants content about/against that competitor.
+2. STATE/TERRITORY - Geographic targeting is specific and important
+3. PERSONA (counselors, admins, CTE coordinators, students, parents) - Who the content is for
+4. TOPIC (FAFSA, WBL, graduation, career exploration) - What the content covers
+5. GENERIC MODIFIERS (comparison, vs, SchooLinks, overview, guide) - These describe FORMAT, not content focus. Often can be ignored.
+
+IMPORTANT: When a competitor is mentioned, terms like "comparison", "vs", "SchooLinks" are ASSUMED - they add no search value because ALL competitor content is comparative. Only include the competitor name and any state/persona/topic filters.
+
+Return a JSON object:
 {
   "types": ["array of content types to filter by"],
   "states": ["array of state abbreviations"],
-  "searchTerms": ["array of keywords to search in title, summary, tags"],
+  "searchTerms": ["PRIORITIZED keywords - most important first, exclude noise words"],
   "correctedQuery": "the query with spelling fixed",
-  "understanding": "brief explanation of what you understood"
+  "understanding": "brief explanation of what you understood",
+  "primaryIntent": "competitor|state|persona|topic|general - what is the user primarily looking for?"
 }
 
 CONTENT TYPE DISAMBIGUATION:
 - "Video" = full-length videos, tutorials, demos, recorded webinars
 - "Video Clip" = short clips, snippets, teasers, highlights (use ONLY when user says "clip", "clips", "short video", or "snippet")
 - IMPORTANT: If query contains "clip" or "clips", use ONLY "Video Clip" type, NOT "Video"
-- If query just says "videos" without "clip", use ONLY "Video" type
 
 Examples:
-- "costumer storys from texs" → types: ["Customer Story"], states: ["TX"], searchTerms: ["customer", "story", "texas"]
-- "videos about college" → types: ["Video"], searchTerms: ["college", "higher education", "university"]
-- "video clips about Xello" → types: ["Video Clip"], searchTerms: ["xello", "competitor"]
-- "short videos" → types: ["Video Clip"], searchTerms: []
-- "Xello clips" → types: ["Video Clip"], searchTerms: ["xello", "competitor"]
-- "content for counselors in california" → states: ["CA"], searchTerms: ["counselor", "counselors", "guidance"]
-- "nevada schools" → states: ["NV"], searchTerms: ["school", "schools", "education", "district"]
-- "customer videos" → types: ["Video"], searchTerms: ["customer", "testimonial"]`
+- "Xello vs SchooLinks comparisons" → searchTerms: ["xello"], primaryIntent: "competitor" (NOT ["xello", "comparison", "schoolinks"])
+- "Naviance content for Texas counselors" → searchTerms: ["naviance", "counselors"], states: ["TX"], primaryIntent: "competitor"
+- "Xello" → searchTerms: ["xello"], primaryIntent: "competitor"
+- "customer stories from Texas" → types: ["Customer Story"], states: ["TX"], searchTerms: [], primaryIntent: "state"
+- "videos about college" → types: ["Video"], searchTerms: ["college"], primaryIntent: "topic"
+- "content for counselors in california" → states: ["CA"], searchTerms: ["counselors"], primaryIntent: "persona"
+- "FAFSA completion resources" → searchTerms: ["fafsa", "completion"], primaryIntent: "topic"`
           },
           {
             role: 'user',
@@ -512,11 +519,13 @@ YOUR RESPONSE FORMAT (MUST BE VALID JSON):
 
 CRITICAL: You MUST respond with valid JSON. The recommendations array is REQUIRED.
 
-**RECOMMENDATION RULES:**
-- Include 5-10 recommendations for comprehensive coverage
-- For competitor searches: prioritize comparison guides, competitive positioning content, and customer stories
-- Match recommendations to the user's specific intent (e.g., "comparisons" = comparison guides first)
+**RECOMMENDATION RULES (CRITICAL):**
+- Include ALL relevant content from the available list (aim for 8-12 recommendations)
+- DO NOT artificially limit recommendations - if 12 items are relevant, show all 12
+- For competitor searches: show ALL content for that competitor (comparison guides, videos, clips, customer stories, etc.)
+- Match recommendations to the user's specific intent (e.g., "comparisons" = comparison guides first, then other content)
 - An empty array [] is ONLY acceptable if truly NO content matches
+- VARIETY: Include different content types (videos, ebooks, customer stories, landing pages) when available
 
 IMPORTANT RULES:
 1. Use EXACT titles from the available content list - COPY THE TITLE EXACTLY
@@ -565,7 +574,7 @@ IMPORTANT RULES:
         model: 'gpt-4o-mini',
         messages,
         temperature: 0.4,
-        max_tokens: 1500
+        max_tokens: 2500  // Increased to allow for more recommendations
       })
     });
 
