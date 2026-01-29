@@ -1,6 +1,13 @@
 {
   "framework": "vite",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ]
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/((?!api/).*)", "destination": "/" }
+  ],
+  "functions": {
+    "api/*.js": {
+      "memory": 256,
+      "maxDuration": 30
+    }
+  }
 }
