@@ -167,6 +167,10 @@ function toggleVoice() {
   if (isListening) {
     recognition.stop();
   } else {
+    // Track voice input started in Heap
+    if (window.heap) {
+      heap.track('AI Voice Input Started');
+    }
     recognition.start();
     addMessage('assistant', '🎤 Listening... Speak now.');
   }
@@ -259,7 +263,33 @@ async function fetchYouTubeMetadata(url) {
 
 async function fetchYouTubeTranscript(videoId) {
   try {
-    const transcriptUrl = `https://video.google.com/timedtext?lang=en&v=${encodeURIComponent(videoId)}&fmt=json3`;
+    const trackListUrl = `https://video.google.com/timedtext?type=list&v=${encodeURIComponent(videoId)}`;
+    const listResponse = await fetch(trackListUrl);
+    if (!listResponse.ok) return null;
+    const listText = await listResponse.text();
+
+    const xml = new DOMParser().parseFromString(listText, 'text/xml');
+    const tracks = Array.from(xml.getElementsByTagName('track')).map((track) => ({
+      lang: track.getAttribute('lang_code') || '',
+      name: track.getAttribute('name') || '',
+      kind: track.getAttribute('kind') || ''
+    }));
+
+    if (tracks.length === 0) return null;
+
+    const preferred =
+      tracks.find((t) => t.lang.startsWith('en') && t.kind !== 'asr') ||
+      tracks.find((t) => t.lang.startsWith('en')) ||
+      tracks[0];
+
+    const params = new URLSearchParams({
+      v: videoId,
+      fmt: 'json3',
+      lang: preferred.lang
+    });
+    if (preferred.name) params.set('name', preferred.name);
+
+    const transcriptUrl = `https://video.google.com/timedtext?${params.toString()}`;
     const response = await fetch(transcriptUrl);
     if (!response.ok) return null;
     const data = await response.json();
@@ -624,6 +654,16 @@ function renderPreview(data) {
 // ============================================
 
 function applyToForm() {
+  // Track apply to form in Heap
+  if (window.heap) {
+    const typeInput = elements.previewFields.querySelector('[data-field="type"]');
+    const platformInput = elements.previewFields.querySelector('[data-field="platform"]');
+    heap.track('AI Fields Applied', {
+      content_type: typeInput?.value || 'unknown',
+      platform: platformInput?.value || 'unknown'
+    });
+  }
+
   const previewInputs = elements.previewFields.querySelectorAll('[data-field]');
   let delay = 0;
 
@@ -665,6 +705,15 @@ async function handleParse() {
   if (!userInput) {
     addMessage('assistant', 'Please paste a URL or describe the content.');
     return;
+  }
+
+  // Track AI analyze in Heap
+  const urls = extractUrls(userInput);
+  if (window.heap) {
+    heap.track('AI Analyze Clicked', {
+      input_type: urls.length > 0 ? getUrlType(urls[0]) : 'text',
+      has_url: urls.length > 0
+    });
   }
 
   // Show loading
@@ -737,6 +786,19 @@ async function handleFileUpload(event) {
     addMessage('assistant', 'Please upload a PDF file.');
     event.target.value = '';
     return;
+  }
+  if (!window.pdfjsLib) {
+    addMessage('assistant', 'PDF parsing library failed to load. Please refresh and try again.');
+    event.target.value = '';
+    return;
+  }
+
+  // Track PDF upload in Heap
+  if (window.heap) {
+    heap.track('AI PDF Uploaded', {
+      file_name: file.name,
+      file_size_kb: Math.round(file.size / 1024)
+    });
   }
 
   elements.parseBtn.disabled = true;

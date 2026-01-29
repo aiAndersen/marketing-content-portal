@@ -197,6 +197,15 @@ function App() {
     setHasMore(false);
     setIsViewAll(false);
 
+    // Track search in Heap
+    if (window.heap) {
+      window.heap.track('Portal Search', {
+        query: query,
+        type_filters: selectedTypes.join(',') || 'none',
+        state_filters: selectedStates.join(',') || 'none'
+      });
+    }
+
     try {
       // Use AI to understand the query
       const aiParams = await convertNaturalLanguageToQuery(query, {
@@ -452,6 +461,11 @@ function App() {
     setHasMore(false);
     setIsViewAll(true);
 
+    // Track View All in Heap
+    if (window.heap) {
+      window.heap.track('Portal View All');
+    }
+
     try {
       const { data, error } = await supabaseClient
         .from('marketing_content')
@@ -479,6 +493,13 @@ function App() {
 
   // Handle chat messages
   const handleChatMessage = async (message) => {
+    // Track chat message in Heap
+    if (window.heap) {
+      window.heap.track('Chat Message Sent', {
+        message_length: message.length
+      });
+    }
+
     // Add user message to history
     const userMessage = {
       id: `user-${Date.now()}`,
@@ -753,6 +774,13 @@ function App() {
   const exportToCSV = () => {
     if (results.length === 0) return;
 
+    // Track CSV export in Heap
+    if (window.heap) {
+      window.heap.track('Portal CSV Export', {
+        result_count: results.length
+      });
+    }
+
     const headers = ['Type', 'Title', 'Live Link', 'Ungated Link', 'Platform', 'State', 'Tags', 'Summary'];
     const rows = results.map(row => [
       row.type,
@@ -814,14 +842,20 @@ function App() {
           <div className="search-mode-toggle">
             <button
               className={`search-mode-btn ${isChatMode ? 'active' : ''}`}
-              onClick={() => setIsChatMode(true)}
+              onClick={() => {
+                setIsChatMode(true);
+                if (window.heap) window.heap.track('Mode Toggled', { mode: 'chat' });
+              }}
             >
               <MessageSquare size={16} />
               Chat Assistant
             </button>
             <button
               className={`search-mode-btn ${!isChatMode ? 'active' : ''}`}
-              onClick={() => setIsChatMode(false)}
+              onClick={() => {
+                setIsChatMode(false);
+                if (window.heap) window.heap.track('Mode Toggled', { mode: 'search' });
+              }}
             >
               <Search size={16} />
               Quick Search
@@ -1094,13 +1128,37 @@ function App() {
 
                 <div className="result-links">
                   {item.live_link && (
-                    <a href={item.live_link} target="_blank" rel="noopener noreferrer" className="result-link">
+                    <a
+                      href={item.live_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="result-link"
+                      onClick={() => {
+                        if (window.heap) window.heap.track('Content Link Clicked', {
+                          content_type: item.type,
+                          content_title: item.title,
+                          link_type: 'live'
+                        });
+                      }}
+                    >
                       <ExternalLink size={14} />
                       View Live
                     </a>
                   )}
                   {item.ungated_link && (
-                    <a href={item.ungated_link} target="_blank" rel="noopener noreferrer" className="result-link">
+                    <a
+                      href={item.ungated_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="result-link"
+                      onClick={() => {
+                        if (window.heap) window.heap.track('Content Link Clicked', {
+                          content_type: item.type,
+                          content_title: item.title,
+                          link_type: 'download'
+                        });
+                      }}
+                    >
                       <Download size={14} />
                       Download
                     </a>

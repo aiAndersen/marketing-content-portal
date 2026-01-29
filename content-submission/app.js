@@ -43,6 +43,16 @@ form.addEventListener('submit', async (e) => {
 
     if (error) throw error;
 
+    // Track content submission in Heap
+    if (window.heap) {
+      heap.track('Content Submitted', {
+        content_type: data.type,
+        platform: data.platform,
+        state: data.state || 'National',
+        has_ungated_link: !!data.ungated_link
+      });
+    }
+
     // Show success message
     form.classList.add('hidden');
     successMessage.classList.remove('hidden');
@@ -80,6 +90,10 @@ let currentPeriod = 'last30'; // Track active period
 
 // Switch between tabs
 function switchTab(tab) {
+  // Track tab switch in Heap
+  if (window.heap) {
+    heap.track('Tab Switched', { tab_name: tab });
+  }
   const submitSection = document.getElementById('main-content');
   const reportsSection = document.getElementById('reports-section');
   const editSection = document.getElementById('edit-section');
@@ -113,6 +127,10 @@ function switchTab(tab) {
 
 // Load report by preset period
 async function loadReportPeriod(period) {
+  // Track report period selection in Heap
+  if (window.heap) {
+    heap.track('Report Period Selected', { period: period });
+  }
   currentPeriod = period;
 
   // Update button states
@@ -281,6 +299,14 @@ function renderBreakdown(data) {
 function exportReportCSV() {
   if (reportData.length === 0) return;
 
+  // Track CSV export in Heap
+  if (window.heap) {
+    heap.track('Report Exported', {
+      period: currentPeriod,
+      row_count: reportData.length
+    });
+  }
+
   const headers = ['Submitted Date', 'Type', 'Title', 'Live Link', 'Ungated Link', 'Platform', 'State', 'Tags', 'Summary'];
   const rows = reportData.map(row => [
     row.created_at ? new Date(row.created_at).toLocaleDateString() : '',
@@ -323,6 +349,14 @@ async function searchContent() {
   const searchInput = document.getElementById('edit-search-input').value.trim();
   const typeFilter = document.getElementById('edit-type-filter').value;
   const resultsDiv = document.getElementById('edit-results');
+
+  // Track content search in Heap
+  if (window.heap) {
+    heap.track('Content Searched', {
+      search_term: searchInput || '(empty)',
+      type_filter: typeFilter || 'All Types'
+    });
+  }
 
   if (!searchInput && !typeFilter) {
     resultsDiv.innerHTML = '<p class="edit-hint">Enter a search term or select a type filter</p>';
@@ -448,6 +482,14 @@ async function saveContentEdit(event) {
 
     if (error) throw error;
 
+    // Track content edit in Heap
+    if (window.heap) {
+      heap.track('Content Edited', {
+        content_type: data.type,
+        content_title: data.title
+      });
+    }
+
     alert('Content updated successfully!');
     closeEditModal();
     searchContent(); // Refresh results
@@ -481,6 +523,13 @@ async function confirmDelete() {
       .eq('id', currentEditId);
 
     if (error) throw error;
+
+    // Track content deletion in Heap
+    if (window.heap) {
+      heap.track('Content Deleted', {
+        content_id: currentEditId
+      });
+    }
 
     alert('Content deleted successfully!');
     closeDeleteModal();
