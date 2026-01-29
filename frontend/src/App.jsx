@@ -670,41 +670,25 @@ function App() {
         }
       );
 
-      // CRITICAL: Filter AI recommendations to only include items that exist in our filtered content
-      // This prevents Naviance content from appearing when searching for Xello
+      // IMPORTANT: Pass ALL recommendations through to ChatInterface
+      // Don't filter here - let ChatInterface handle finding matching items
+      // This ensures recommendation cards ALWAYS appear in the chat
+      // Even if we can't find the exact item, the card shows "See results below"
       //
-      // NOTE: Use fuzzy title matching because AI may return slightly different titles
-      // (different casing, extra spaces, minor variations). This ensures recommendations
-      // aren't accidentally filtered out due to minor title mismatches.
-      //
-      // DOCUMENTED FIX: Changed from exact match (===) to fuzzy match to prevent
-      // recommendations from disappearing after deployments. See git history for context.
+      // The fuzzy matching happens in ChatInterface when looking up items for links
       const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ');
 
-      const validRecommendations = (response.recommendations || []).filter(rec => {
-        const recTitleNorm = normalizeForMatch(rec.title);
-        // Try exact match first, then fuzzy match (contains or contained by)
-        const exists = contentForContext.some(item => {
-          const itemTitleNorm = normalizeForMatch(item.title);
-          return itemTitleNorm === recTitleNorm ||
-                 itemTitleNorm.includes(recTitleNorm) ||
-                 recTitleNorm.includes(itemTitleNorm);
-        });
-        if (!exists) {
-          console.log('[Chat] Filtering out recommendation (no match in results):', rec.title);
-        }
-        return exists;
-      });
-      console.log(`[Chat] Valid recommendations: ${validRecommendations.length} of ${(response.recommendations || []).length}`);
-      console.log('[Chat] Original recommendations from AI:', response.recommendations);
-      console.log('[Chat] Filtered valid recommendations:', validRecommendations);
+      // Log recommendations for debugging
+      console.log('[Chat] Recommendations from AI:', response.recommendations);
+      console.log('[Chat] Content available for matching:', contentForContext.length, 'items');
 
-      // Add assistant response to history with ONLY valid recommendations
+      // Add assistant response to history with ALL recommendations
+      // ChatInterface will handle finding matching items for links
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: response.response,
-        recommendations: validRecommendations,
+        recommendations: response.recommendations || [],
         followUpQuestions: response.followUpQuestions,
         aiContent: response.aiContent,
         timestamp: Date.now()

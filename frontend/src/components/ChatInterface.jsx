@@ -307,18 +307,37 @@ function ChatInterface({
                   <div className="chat-rec-grid">
                     {message.recommendations.map((rec, idx) => {
                       // Find item by title - check both results and full database
-                      // Use fuzzy matching to handle minor title variations from AI
-                      const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                      // Use aggressive fuzzy matching to handle title variations from AI
+                      const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
                       const recTitleNorm = normalizeForMatch(rec.title);
+
+                      // Extract key words for matching (first 5-6 significant words)
+                      const getKeyWords = (str) => {
+                        const words = normalizeForMatch(str).split(' ').filter(w => w.length > 3);
+                        return words.slice(0, 6);
+                      };
+                      const recKeyWords = getKeyWords(rec.title);
 
                       const findByFuzzyTitle = (items) => (items || []).find(r => {
                         const itemTitleNorm = normalizeForMatch(r.title);
-                        return itemTitleNorm === recTitleNorm ||
-                               itemTitleNorm.includes(recTitleNorm) ||
-                               recTitleNorm.includes(itemTitleNorm);
+                        // Exact match
+                        if (itemTitleNorm === recTitleNorm) return true;
+                        // Contains match
+                        if (itemTitleNorm.includes(recTitleNorm) || recTitleNorm.includes(itemTitleNorm)) return true;
+                        // Key words match - if 3+ key words match, consider it a match
+                        const itemKeyWords = getKeyWords(r.title);
+                        const matchCount = recKeyWords.filter(w => itemKeyWords.includes(w)).length;
+                        if (matchCount >= 3) return true;
+                        return false;
                       });
 
                       const item = findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
+
+                      // Debug: log if no match found
+                      if (!item && rec.title) {
+                        console.log('[ChatInterface] No match found for recommendation:', rec.title);
+                        console.log('[ChatInterface] Available results:', (results || []).slice(0, 5).map(r => r.title));
+                      }
 
                       // Always render card - use rec data as fallback if item not found
                       const title = item?.title || rec.title;
