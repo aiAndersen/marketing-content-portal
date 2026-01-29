@@ -207,23 +207,45 @@ function App() {
     }
 
     try {
-      // Use AI to understand the query
-      const aiParams = await convertNaturalLanguageToQuery(query, {
-        types: selectedTypes,
-        states: selectedStates
-      });
+      // Check if this is a filter-only search (no query text, but filters selected)
+      const isFilterOnlySearch = !query.trim() && (selectedTypes.length > 0 || selectedStates.length > 0);
 
-      console.log('AI parsed query:', aiParams);
+      let aiParams = { types: [], states: [], searchTerms: [], understanding: '' };
 
-      // Show AI insight to user
-      if (aiParams.understanding) {
+      if (isFilterOnlySearch) {
+        // Skip AI call for filter-only searches - just use the selected filters
+        console.log('[Search] Filter-only search:', { types: selectedTypes, states: selectedStates });
+
+        // Build a helpful message about the filters being used
+        const filterParts = [];
+        if (selectedTypes.length > 0) filterParts.push(`Types: ${selectedTypes.join(', ')}`);
+        if (selectedStates.length > 0) filterParts.push(`States: ${selectedStates.join(', ')}`);
+
         setAiInsight({
-          understanding: aiParams.understanding,
-          correctedQuery: aiParams.correctedQuery,
-          types: aiParams.types,
-          states: aiParams.states,
-          searchTerms: aiParams.searchTerms
+          understanding: `Showing content filtered by: ${filterParts.join(' | ')}`,
+          types: selectedTypes,
+          states: selectedStates,
+          searchTerms: []
         });
+      } else if (query.trim()) {
+        // Use AI to understand the query
+        aiParams = await convertNaturalLanguageToQuery(query, {
+          types: selectedTypes,
+          states: selectedStates
+        });
+
+        console.log('AI parsed query:', aiParams);
+
+        // Show AI insight to user
+        if (aiParams.understanding) {
+          setAiInsight({
+            understanding: aiParams.understanding,
+            correctedQuery: aiParams.correctedQuery,
+            types: aiParams.types,
+            states: aiParams.states,
+            searchTerms: aiParams.searchTerms
+          });
+        }
       }
 
       // Merge AI-detected filters with user-selected filters
