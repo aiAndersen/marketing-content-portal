@@ -1,3 +1,5 @@
 {
-    "public": true
-  }
+  "buildCommand": "npm run build",
+  "outputDirectory": ".",
+  "public": true
+}

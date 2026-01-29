@@ -27,3 +27,6 @@ npm-debug.log*
 Thumbs.db
 .vercel
 .env*.local
+
+# Generated config (contains API keys)
+content-submission/config.js
