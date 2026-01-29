@@ -276,7 +276,18 @@ function ChatInterface({
           </div>
         )}
 
-        {conversationHistory.map((message) => (
+        {conversationHistory.map((message) => {
+          // Debug logging for recommendation cards
+          if (message.role === 'assistant') {
+            console.log('[ChatInterface] Rendering assistant message:', {
+              id: message.id,
+              hasRecommendations: !!message.recommendations,
+              recommendationCount: message.recommendations?.length || 0,
+              recommendations: message.recommendations
+            });
+          }
+
+          return (
           <div
             key={message.id}
             className={`chat-message chat-message-${message.role}`}
@@ -420,7 +431,8 @@ function ChatInterface({
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {loading && (
           <div className="chat-message chat-message-assistant chat-loading">
