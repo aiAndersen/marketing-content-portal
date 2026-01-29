@@ -979,20 +979,26 @@ YOUR RESPONSE FORMAT (MUST BE VALID JSON):
   "followUpQuestions": ["Actionable search prompt 1", "Actionable search prompt 2"]
 }
 
-CRITICAL: You MUST respond with valid JSON. The recommendations array is REQUIRED.
+CRITICAL REQUIREMENTS - READ CAREFULLY:
+1. You MUST respond with valid JSON
+2. The "recommendations" array MUST NEVER BE EMPTY if content is available above
+3. ALWAYS include at least 3-5 recommendations from the available content list
+4. Every response needs recommendations - even when answering questions
 
 **DUAL MODE OPERATION:**
-1. QUESTION MODE: When the user asks a question (what, how, why, etc.), FIRST answer the question thoroughly using your SchooLinks knowledge, THEN recommend supporting content.
+1. QUESTION MODE: When the user asks a question (what, how, why, etc.), FIRST answer the question thoroughly using your SchooLinks knowledge, THEN ALWAYS recommend supporting content from the list above.
 2. SEARCH MODE: When the user wants to find content, focus on recommendations with brief context.
 
-**RECOMMENDATION RULES (CRITICAL):**
-- For questions: Include 2-5 content pieces that support or elaborate on your answer
+**RECOMMENDATION RULES (MANDATORY - NEVER SKIP):**
+- EVERY RESPONSE MUST include recommendations from the available content above
+- For questions: Include 3-6 content pieces that support or elaborate on your answer
 - For searches: Include ALL relevant content (aim for 8-12 recommendations)
 - DO NOT artificially limit recommendations - if 12 items are relevant, show all 12
 - For competitor searches: show ALL content for that competitor
 - Match recommendations to the user's specific intent
-- An empty array [] is ONLY acceptable if truly NO content matches
+- An empty array [] is ONLY acceptable if the AVAILABLE CONTENT IN DATABASE section above is completely empty
 - VARIETY: Include different content types (videos, ebooks, customer stories, landing pages) when available
+- LOOK at the content list above and pick items that relate to the query
 
 IMPORTANT RULES:
 1. Use EXACT titles from the available content list - COPY THE TITLE EXACTLY
