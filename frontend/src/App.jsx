@@ -672,14 +672,32 @@ function App() {
 
       // CRITICAL: Filter AI recommendations to only include items that exist in our filtered content
       // This prevents Naviance content from appearing when searching for Xello
+      //
+      // NOTE: Use fuzzy title matching because AI may return slightly different titles
+      // (different casing, extra spaces, minor variations). This ensures recommendations
+      // aren't accidentally filtered out due to minor title mismatches.
+      //
+      // DOCUMENTED FIX: Changed from exact match (===) to fuzzy match to prevent
+      // recommendations from disappearing after deployments. See git history for context.
+      const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
       const validRecommendations = (response.recommendations || []).filter(rec => {
-        const exists = contentForContext.some(item => item.title === rec.title);
+        const recTitleNorm = normalizeForMatch(rec.title);
+        // Try exact match first, then fuzzy match (contains or contained by)
+        const exists = contentForContext.some(item => {
+          const itemTitleNorm = normalizeForMatch(item.title);
+          return itemTitleNorm === recTitleNorm ||
+                 itemTitleNorm.includes(recTitleNorm) ||
+                 recTitleNorm.includes(itemTitleNorm);
+        });
         if (!exists) {
-          console.log('[Chat] Filtering out invalid recommendation (not in filtered results):', rec.title);
+          console.log('[Chat] Filtering out recommendation (no match in results):', rec.title);
         }
         return exists;
       });
       console.log(`[Chat] Valid recommendations: ${validRecommendations.length} of ${(response.recommendations || []).length}`);
+      console.log('[Chat] Original recommendations from AI:', response.recommendations);
+      console.log('[Chat] Filtered valid recommendations:', validRecommendations);
 
       // Add assistant response to history with ONLY valid recommendations
       const assistantMessage = {
@@ -701,8 +719,15 @@ function App() {
         const usedTitles = new Set();
 
         // 1. Add recommended items first (in order)
+        // Use same fuzzy matching as validRecommendations filter above
         for (const rec of recommendations) {
-          const item = contentForContext.find(r => r.title === rec.title);
+          const recTitleNorm = normalizeForMatch(rec.title);
+          const item = contentForContext.find(r => {
+            const itemTitleNorm = normalizeForMatch(r.title);
+            return itemTitleNorm === recTitleNorm ||
+                   itemTitleNorm.includes(recTitleNorm) ||
+                   recTitleNorm.includes(itemTitleNorm);
+          });
           if (item && !usedTitles.has(item.title)) {
             orderedResults.push(item);
             usedTitles.add(item.title);

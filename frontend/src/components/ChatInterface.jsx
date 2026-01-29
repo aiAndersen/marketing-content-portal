@@ -307,8 +307,18 @@ function ChatInterface({
                   <div className="chat-rec-grid">
                     {message.recommendations.map((rec, idx) => {
                       // Find item by title - check both results and full database
-                      const item = (results || []).find(r => r.title === rec.title) ||
-                                   (contentDatabase || []).find(r => r.title === rec.title);
+                      // Use fuzzy matching to handle minor title variations from AI
+                      const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                      const recTitleNorm = normalizeForMatch(rec.title);
+
+                      const findByFuzzyTitle = (items) => (items || []).find(r => {
+                        const itemTitleNorm = normalizeForMatch(r.title);
+                        return itemTitleNorm === recTitleNorm ||
+                               itemTitleNorm.includes(recTitleNorm) ||
+                               recTitleNorm.includes(itemTitleNorm);
+                      });
+
+                      const item = findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
 
                       // Always render card - use rec data as fallback if item not found
                       const title = item?.title || rec.title;
