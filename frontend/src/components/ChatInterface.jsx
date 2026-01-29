@@ -1,5 +1,109 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, User, ExternalLink, RefreshCw, FileText, Download } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Sparkles, User, ExternalLink, RefreshCw, FileText, Download, Mic, MicOff, Loader2 } from 'lucide-react';
+
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+
+/**
+ * Custom hook for OpenAI Whisper speech-to-text
+ */
+function useWhisperSpeechToText() {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [error, setError] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      setError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Use webm format which Whisper supports well
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start(100); // Collect data every 100ms
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Microphone access error:', err);
+      setError('Microphone access denied. Please enable it in browser settings.');
+    }
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    return new Promise((resolve) => {
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        resolve(null);
+        return;
+      }
+
+      mediaRecorderRef.current.onstop = async () => {
+        setIsRecording(false);
+        setIsTranscribing(true);
+
+        try {
+          // Create audio blob
+          const audioBlob = new Blob(audioChunksRef.current, {
+            type: mediaRecorderRef.current.mimeType
+          });
+
+          // Stop all tracks
+          mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+
+          // Send to OpenAI Whisper API
+          const formData = new FormData();
+          formData.append('file', audioBlob, 'recording.webm');
+          formData.append('model', 'whisper-1');
+          formData.append('language', 'en');
+
+          const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error(`Whisper API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          setIsTranscribing(false);
+          resolve(data.text || '');
+        } catch (err) {
+          console.error('Transcription error:', err);
+          setError('Failed to transcribe audio. Please try again.');
+          setIsTranscribing(false);
+          resolve(null);
+        }
+      };
+
+      mediaRecorderRef.current.stop();
+    });
+  }, []);
+
+  const isSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && OPENAI_API_KEY);
+
+  return {
+    isRecording,
+    isTranscribing,
+    error,
+    startRecording,
+    stopRecording,
+    isSupported
+  };
+}
 
 /**
  * Format AI response text for better readability
@@ -77,6 +181,16 @@ function ChatInterface({
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Voice input with OpenAI Whisper
+  const {
+    isRecording,
+    isTranscribing,
+    error: voiceError,
+    startRecording,
+    stopRecording,
+    isSupported: voiceSupported
+  } = useWhisperSpeechToText();
+
   // Auto-scroll within chat container only (not the page)
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -99,6 +213,20 @@ function ChatInterface({
   const handleSuggestionClick = (suggestion) => {
     if (loading) return;
     onSendMessage(suggestion);
+  };
+
+  // Handle voice input toggle
+  const handleVoiceToggle = async () => {
+    if (isRecording) {
+      const transcript = await stopRecording();
+      if (transcript) {
+        // Append to existing input or set new value
+        setInputValue(prev => prev ? `${prev} ${transcript}` : transcript);
+        inputRef.current?.focus();
+      }
+    } else {
+      startRecording();
+    }
   };
 
   // Suggested queries from SchooLinks context doc section 13
@@ -267,19 +395,46 @@ function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Voice error message */}
+      {voiceError && (
+        <div className="chat-voice-error">
+          {voiceError}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="chat-input-form">
         <input
           ref={inputRef}
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ask about marketing content..."
-          disabled={loading}
+          placeholder={isRecording ? "Listening... click mic to stop" : isTranscribing ? "Transcribing..." : "Ask about marketing content..."}
+          disabled={loading || isTranscribing}
           className="chat-input"
         />
+
+        {/* Voice input button */}
+        {voiceSupported && (
+          <button
+            type="button"
+            onClick={handleVoiceToggle}
+            disabled={loading || isTranscribing}
+            className={`chat-voice-btn ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`}
+            title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing..." : "Voice input"}
+          >
+            {isTranscribing ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : isRecording ? (
+              <MicOff size={18} />
+            ) : (
+              <Mic size={18} />
+            )}
+          </button>
+        )}
+
         <button
           type="submit"
-          disabled={loading || !inputValue.trim()}
+          disabled={loading || !inputValue.trim() || isTranscribing}
           className="chat-send-btn"
         >
           <Send size={18} />
