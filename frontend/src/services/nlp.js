@@ -883,13 +883,27 @@ function detectQueryType(query) {
  * Process a conversational query with history context
  * Supports multi-turn dialog for the chat interface
  * Enhanced to detect and answer SchooLinks-specific questions
+ * @param {string} userMessage - The user's message
+ * @param {Array} conversationHistory - Previous messages in the conversation
+ * @param {Array} availableContent - Content items from the database
+ * @param {Object} options - Additional options
+ * @param {string} options.stateContext - State-specific context to include in the prompt
+ * @param {Array} options.detectedStates - State codes detected in the query
+ * @param {number} options.maxContentForContext - Max content items to include
  */
 export async function processConversationalQuery(
   userMessage,
   conversationHistory,
   availableContent,
-  maxContentForContext = 100
+  options = {}
 ) {
+  // Handle backwards compatibility: if options is a number, treat it as maxContentForContext
+  const {
+    stateContext = null,
+    detectedStates = [],
+    maxContentForContext = 100
+  } = typeof options === 'number' ? { maxContentForContext: options } : options;
+
   if (!OPENAI_API_KEY) {
     return {
       response: "AI assistant unavailable. Please use the search bar instead.",
@@ -900,6 +914,9 @@ export async function processConversationalQuery(
   // Detect if this is a question about SchooLinks vs a content search
   const queryType = detectQueryType(userMessage);
   console.log('[Chat] Query type detection:', queryType);
+  if (detectedStates.length > 0) {
+    console.log('[Chat] State context provided for:', detectedStates);
+  }
 
   // Create content summary for context (include summary + all tags for better matching)
   // Use enriched data (enhanced_summary, auto_tags) when available
@@ -930,6 +947,17 @@ For competitor questions: Explain SchooLinks advantages and differentiators
 For general questions: Use your SchooLinks knowledge to provide helpful context
 ` : '';
 
+  // Build state-specific context section if available
+  const stateContextSection = stateContext && detectedStates.length > 0 ? `
+
+## STATE-SPECIFIC CONTEXT FOR ${detectedStates.join(', ')}
+**IMPORTANT: Use this state-specific information when the user asks about ${detectedStates.join(' or ')} or related topics.**
+
+${stateContext}
+
+---
+` : '';
+
   // Build conversation messages for OpenAI
   const messages = [
     {
@@ -937,6 +965,7 @@ For general questions: Use your SchooLinks knowledge to provide helpful context
       content: `You are an intelligent content assistant for SchooLinks marketing team. You help users find the most relevant marketing content AND answer questions about SchooLinks products and features.
 
 ${SCHOOLINKS_CONTEXT}
+${stateContextSection}
 ${questionSystemPrompt}
 AVAILABLE CONTENT IN DATABASE:
 ${contentSummary}

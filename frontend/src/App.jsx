@@ -499,6 +499,30 @@ function App() {
 
       console.log('[Chat] AI params:', { searchTerms, detectedStates, primaryIntent });
 
+      // Fetch state-specific context if states were detected
+      let stateContext = null;
+      if (detectedStates.length > 0) {
+        try {
+          const { data: contextData } = await supabaseClient
+            .from('ai_context')
+            .select('content, title, summary')
+            .eq('category', 'state_context')
+            .in('subcategory', detectedStates);
+
+          if (contextData && contextData.length > 0) {
+            // Combine all state contexts (truncate to reasonable size for prompt)
+            stateContext = contextData.map(ctx => {
+              // Use summary + key sections (first 3000 chars) to keep prompt manageable
+              const content = ctx.content || '';
+              return `### ${ctx.title}\n${ctx.summary}\n\n${content.substring(0, 4000)}`;
+            }).join('\n\n---\n\n');
+            console.log('[Chat] Loaded state context for:', detectedStates, '- Length:', stateContext.length);
+          }
+        } catch (err) {
+          console.warn('[Chat] Error fetching state context:', err);
+        }
+      }
+
       // Build a search query to find relevant content
       let queryBuilder = supabaseClient
         .from('marketing_content')
@@ -613,11 +637,16 @@ function App() {
 
       setResults(contentForContext);
 
-      // Process with conversation context
+      // Process with conversation context (include state-specific context if available)
       const response = await processConversationalQuery(
         message,
         conversationHistory,
-        contentForContext
+        contentForContext,
+        {
+          stateContext,
+          detectedStates,
+          maxContentForContext: 100
+        }
       );
 
       // CRITICAL: Filter AI recommendations to only include items that exist in our filtered content
