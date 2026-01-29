@@ -1205,6 +1205,48 @@ body {
   background: #005a8c;
 }
 
+.chat-rec-no-link {
+  font-size: 0.7rem;
+  color: var(--sl-gray-500);
+  font-style: italic;
+}
+
+/* Formatted response text styles */
+.chat-response-text {
+  line-height: 1.6;
+}
+
+.chat-response-text p {
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.chat-response-text p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-response-text strong {
+  font-weight: var(--font-weight-bold);
+  color: var(--sl-black);
+}
+
+.chat-response-text em {
+  font-style: italic;
+}
+
+.chat-response-list {
+  margin: var(--spacing-sm) 0;
+  padding-left: var(--spacing-lg);
+}
+
+.chat-response-list li {
+  margin-bottom: var(--spacing-xs);
+  line-height: 1.5;
+}
+
+.chat-response-list li:last-child {
+  margin-bottom: 0;
+}
+
 .chat-follow-ups {
   display: flex;
   flex-wrap: wrap;

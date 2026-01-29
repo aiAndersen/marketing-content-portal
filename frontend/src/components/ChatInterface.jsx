@@ -2,6 +2,64 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, User, ExternalLink, RefreshCw, FileText, Download } from 'lucide-react';
 
 /**
+ * Format AI response text for better readability
+ * Converts markdown-style text to structured HTML
+ */
+function formatResponseText(text) {
+  // Guard against null/undefined/non-string input
+  if (!text || typeof text !== 'string') {
+    return text ? <p>{String(text)}</p> : null;
+  }
+
+  // Split into paragraphs
+  const paragraphs = text.split(/\n\n+/);
+
+  return paragraphs.map((paragraph, pIdx) => {
+    // Check if it's a list (starts with - or *)
+    if (paragraph.trim().match(/^[-*•]\s/m)) {
+      const items = paragraph.split(/\n/).filter(line => line.trim());
+      return (
+        <ul key={pIdx} className="chat-response-list">
+          {items.map((item, iIdx) => (
+            <li key={iIdx}>{item.replace(/^[-*•]\s*/, '')}</li>
+          ))}
+        </ul>
+      );
+    }
+
+    // Check if it's a numbered list
+    if (paragraph.trim().match(/^\d+[.)]\s/m)) {
+      const items = paragraph.split(/\n/).filter(line => line.trim());
+      return (
+        <ol key={pIdx} className="chat-response-list">
+          {items.map((item, iIdx) => (
+            <li key={iIdx}>{item.replace(/^\d+[.)]\s*/, '')}</li>
+          ))}
+        </ol>
+      );
+    }
+
+    // Regular paragraph - handle inline formatting
+    let formattedText = paragraph;
+
+    // Bold: **text** or __text__
+    formattedText = formattedText.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    formattedText = formattedText.replace(/__(.+?)__/g, '<strong>$1</strong>');
+
+    // Italic: *text* or _text_
+    formattedText = formattedText.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    formattedText = formattedText.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+    // Handle line breaks within paragraph
+    formattedText = formattedText.replace(/\n/g, '<br/>');
+
+    return (
+      <p key={pIdx} dangerouslySetInnerHTML={{ __html: formattedText }} />
+    );
+  });
+}
+
+/**
  * ChatInterface Component
  * Provides a conversational interface for the AI Search Assistant
  * Supports multi-turn dialog with conversation history
@@ -103,7 +161,13 @@ function ChatInterface({
               )}
             </div>
             <div className="chat-message-content">
-              <p>{message.content}</p>
+              {message.role === 'user' ? (
+                <p>{message.content}</p>
+              ) : (
+                <div className="chat-response-text">
+                  {formatResponseText(message.content)}
+                </div>
+              )}
 
               {/* Render recommendations for assistant messages */}
               {message.role === 'assistant' && message.recommendations?.length > 0 && (
@@ -115,26 +179,30 @@ function ChatInterface({
                   <div className="chat-rec-grid">
                     {message.recommendations.map((rec, idx) => {
                       // Find item by title - check both results and full database
-                      const item = results.find(r => r.title === rec.title) ||
+                      const item = (results || []).find(r => r.title === rec.title) ||
                                    (contentDatabase || []).find(r => r.title === rec.title);
-                      if (!item) {
-                        console.log('[Chat] Recommendation not found:', rec.title);
-                        return null;
-                      }
+
+                      // Always render card - use rec data as fallback if item not found
+                      const title = item?.title || rec.title;
+                      const type = item?.type || rec.type || 'Content';
+                      const state = item?.state;
+                      const liveLink = item?.live_link;
+                      const ungatedLink = item?.ungated_link;
+
                       return (
                         <div key={idx} className="chat-rec-card">
                           <div className="chat-rec-card-header">
-                            <span className="chat-rec-type">{item.type}</span>
-                            {item.state && <span className="chat-rec-state">{item.state}</span>}
+                            <span className="chat-rec-type">{type}</span>
+                            {state && <span className="chat-rec-state">{state}</span>}
                           </div>
-                          <div className="chat-rec-card-title">{item.title}</div>
+                          <div className="chat-rec-card-title">{title}</div>
                           {rec.reason && (
                             <div className="chat-rec-card-reason">{rec.reason}</div>
                           )}
                           <div className="chat-rec-card-actions">
-                            {item.live_link && (
+                            {liveLink && (
                               <a
-                                href={item.live_link}
+                                href={liveLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="chat-rec-action-btn primary"
@@ -142,15 +210,18 @@ function ChatInterface({
                                 View Live <ExternalLink size={12} />
                               </a>
                             )}
-                            {item.ungated_link && (
+                            {ungatedLink && (
                               <a
-                                href={item.ungated_link}
+                                href={ungatedLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="chat-rec-action-btn"
                               >
                                 <Download size={12} /> Download
                               </a>
+                            )}
+                            {!liveLink && !ungatedLink && (
+                              <span className="chat-rec-no-link">See results below</span>
                             )}
                           </div>
                         </div>
