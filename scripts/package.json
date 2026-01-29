@@ -1,5 +1,9 @@
 {
   "devDependencies": {
     "pg": "^8.17.2"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.93.2",
+    "dotenv": "^17.2.3"
   }
 }
