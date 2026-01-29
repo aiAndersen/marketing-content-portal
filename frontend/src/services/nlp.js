@@ -1079,53 +1079,72 @@ IMPORTANT RULES:
 
       let recommendations = parsed.recommendations || [];
 
-      // FALLBACK: If AI didn't populate recommendations array but mentioned titles in text,
-      // extract them and match against available content
-      if (recommendations.length === 0 && availableContent.length > 0) {
-        console.log('[Chat] Empty recommendations array - attempting to extract from response text');
+      // ALWAYS extract titles mentioned in bold from prose response
+      // This fixes the mismatch where AI puts right content in prose but wrong content in recommendations array
+      const boldTitleMatches = (parsed.response || content).match(/\*\*"?([^"*]+)"?\*\*/g) || [];
+      const extractedTitles = boldTitleMatches.map(m => m.replace(/\*\*/g, '').replace(/"/g, '').trim());
 
-        // Extract titles mentioned in bold markdown: **"Title"** or **Title**
-        const boldTitleMatches = (parsed.response || content).match(/\*\*"?([^"*]+)"?\*\*/g) || [];
-        const extractedTitles = boldTitleMatches.map(m => m.replace(/\*\*/g, '').replace(/"/g, '').trim());
+      console.log('[Chat] AI returned recommendations:', recommendations.length);
+      console.log('[Chat] Titles mentioned in prose:', extractedTitles.length, extractedTitles);
 
-        console.log('[Chat] Extracted titles from text:', extractedTitles);
+      // Match extracted titles against available content using fuzzy matching
+      const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
 
-        // Match extracted titles against available content using fuzzy matching
-        const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
+      const proseMatchedContent = [];
+      for (const extractedTitle of extractedTitles) {
+        const titleNorm = normalizeForMatch(extractedTitle);
+        if (titleNorm.length < 8) continue; // Skip short matches
 
-        for (const extractedTitle of extractedTitles) {
-          const titleNorm = normalizeForMatch(extractedTitle);
-          if (titleNorm.length < 10) continue; // Skip very short matches
+        const matchedItem = availableContent.find(item => {
+          const itemTitleNorm = normalizeForMatch(item.title);
+          return itemTitleNorm === titleNorm ||
+                 itemTitleNorm.includes(titleNorm) ||
+                 titleNorm.includes(itemTitleNorm);
+        });
 
-          const matchedItem = availableContent.find(item => {
-            const itemTitleNorm = normalizeForMatch(item.title);
-            return itemTitleNorm === titleNorm ||
-                   itemTitleNorm.includes(titleNorm) ||
-                   titleNorm.includes(itemTitleNorm);
+        if (matchedItem && !proseMatchedContent.some(r => r.title === matchedItem.title)) {
+          proseMatchedContent.push({
+            title: matchedItem.title,
+            reason: 'Recommended in response'
           });
-
-          if (matchedItem && !recommendations.some(r => r.title === matchedItem.title)) {
-            recommendations.push({
-              title: matchedItem.title,
-              reason: 'Mentioned in response'
-            });
-          }
         }
-
-        // If still no recommendations, add top content items as fallback
-        if (recommendations.length === 0) {
-          console.log('[Chat] No title matches found - adding top available content as fallback');
-          recommendations = availableContent.slice(0, 5).map(item => ({
-            title: item.title,
-            reason: `Relevant ${item.type} for your query`
-          }));
-        }
-
-        console.log('[Chat] Final recommendations after fallback:', recommendations);
       }
 
+      // PRIORITY: Use prose-extracted titles if we found any matches
+      // This ensures cards match what AI mentioned in the response text
+      if (proseMatchedContent.length > 0) {
+        console.log('[Chat] Using prose-extracted titles as recommendations:', proseMatchedContent.length);
+        recommendations = proseMatchedContent;
+      } else if (recommendations.length === 0 && availableContent.length > 0) {
+        // Fallback: no prose titles AND no AI recommendations - use top content
+        console.log('[Chat] No recommendations found - using top available content');
+        recommendations = availableContent.slice(0, 5).map(item => ({
+          title: item.title,
+          reason: `Relevant ${item.type} for your query`
+        }));
+      }
+
+      console.log('[Chat] Final recommendations:', recommendations);
+
+      // Clean up the response text - remove the inline content recommendations section
+      // since we're showing them as cards instead (avoids duplication)
+      let cleanResponse = parsed.response || content;
+
+      // Remove sections that list content recommendations inline
+      // Pattern: "I recommend the following content:" followed by bold titles
+      cleanResponse = cleanResponse.replace(/(?:For (?:more|further) insights?,? |Here are some |I recommend the following content(?:\s*pieces)?:?\s*)\n*(?:\*\*"?[^*]+?"?\*\*[^\n]*\n*)+/gi, '');
+
+      // Remove orphaned "For more insights" or "I recommend" lead-ins that got partially cleaned
+      cleanResponse = cleanResponse.replace(/(?:For (?:more|further) insights?,?\s*|I recommend the following(?:\s*content)?:?\s*)$/gim, '');
+
+      // Remove lines that are just bold titles with descriptions (recommendation lists)
+      cleanResponse = cleanResponse.replace(/^\s*\*\*"?[^*]+?"?\*\*\s*[-–—]\s*[^\n]+$/gm, '');
+
+      // Clean up multiple newlines left behind
+      cleanResponse = cleanResponse.replace(/\n{3,}/g, '\n\n').trim();
+
       return {
-        response: parsed.response || content,
+        response: cleanResponse,
         recommendations: recommendations,
         followUpQuestions: parsed.followUpQuestions || [],
         aiContent: content // Store raw for context continuity

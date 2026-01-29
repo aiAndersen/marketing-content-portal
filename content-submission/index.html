@@ -260,8 +260,152 @@
           <!-- Summary stats appear here -->
         </div>
 
+        <div class="reports-insights">
+          <div class="insight-card wide">
+            <div class="insight-header">
+              <h3>Submission Trend</h3>
+              <span class="insight-meta" id="trend-meta">Loading…</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="trend-chart" height="140"></canvas>
+            </div>
+          </div>
+          <div class="insight-card">
+            <div class="insight-header">
+              <h3>Top Content Types</h3>
+              <span class="insight-meta">Top 8</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="type-bar-chart" height="180"></canvas>
+            </div>
+          </div>
+          <div class="insight-card">
+            <div class="insight-header">
+              <h3>Platforms</h3>
+              <span class="insight-meta">Share of submissions</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="platform-donut-chart" height="180"></canvas>
+            </div>
+          </div>
+          <div class="insight-card">
+            <div class="insight-header">
+              <h3>Content Mix</h3>
+              <span class="insight-meta">Type distribution</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="type-donut-chart" height="180"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="reports-ai-panel">
+          <div class="reports-ai-header">
+            <div>
+              <h3>AI Insights Assistant</h3>
+              <p>Ask questions about coverage gaps, content mix, and trends.</p>
+            </div>
+            <span class="reports-ai-status" id="reports-ai-status">Ready</span>
+          </div>
+          <div class="reports-ai-body">
+            <div class="reports-ai-messages" id="reports-ai-messages"></div>
+            <div class="reports-ai-suggestions">
+              <button class="chip" type="button" onclick="sendReportAISuggestion('Where are the biggest content gaps by state?')">State gaps</button>
+              <button class="chip" type="button" onclick="sendReportAISuggestion('What content types are over- or under-represented?')">Content mix</button>
+              <button class="chip" type="button" onclick="sendReportAISuggestion('How did the last 30 days compare to the previous 30 days?')">30-day change</button>
+              <button class="chip" type="button" onclick="sendReportAISuggestion('Which platforms are growing fastest?')">Platform trends</button>
+            </div>
+          </div>
+          <div class="reports-ai-input-row">
+            <textarea id="reports-ai-input" class="reports-ai-input" rows="2" placeholder="Ask about trends, gaps, or specific states..."></textarea>
+            <button id="reports-ai-send" class="btn btn-primary" type="button">Ask</button>
+          </div>
+        </div>
+
         <div class="reports-breakdown" id="reports-breakdown">
           <!-- Type/Platform/State breakdown appears here -->
+        </div>
+
+        <div class="state-explorer">
+          <div class="state-explorer-header">
+            <div>
+              <h3>State Explorer</h3>
+              <p>Click a state to view all content, rolling 30-day activity, and content type mix.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="scrollToStateDetail()">Jump to State Detail</button>
+          </div>
+          <div class="state-grid" id="state-grid">
+            <!-- State cards appear here -->
+          </div>
+        </div>
+
+        <div class="state-detail hidden" id="state-detail">
+          <div class="state-detail-header">
+            <div>
+              <h3 id="state-detail-title">State Detail</h3>
+              <p id="state-detail-subtitle">Select a state from the explorer to load insights.</p>
+            </div>
+            <div class="state-detail-actions">
+              <button class="btn btn-ghost btn-sm" onclick="closeStateDetail()">Close</button>
+            </div>
+          </div>
+
+          <div class="state-detail-kpis" id="state-detail-kpis"></div>
+
+          <div class="state-detail-charts">
+            <div class="insight-card">
+              <div class="insight-header">
+                <h3>Rolling 30-Day Trend</h3>
+                <span class="insight-meta">Last 30 days</span>
+              </div>
+              <div class="chart-wrapper">
+                <canvas id="state-rolling-chart" height="160"></canvas>
+              </div>
+            </div>
+            <div class="insight-card">
+              <div class="insight-header">
+                <h3>Top Content Types</h3>
+                <span class="insight-meta">State mix</span>
+              </div>
+              <div class="chart-wrapper">
+                <canvas id="state-type-chart" height="160"></canvas>
+              </div>
+            </div>
+            <div class="insight-card">
+              <div class="insight-header">
+                <h3>Top Platforms</h3>
+                <span class="insight-meta">State mix</span>
+              </div>
+              <div class="chart-wrapper">
+                <canvas id="state-platform-chart" height="160"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="state-detail-table">
+            <div class="state-detail-table-header">
+              <h4>All Content in State</h4>
+              <span class="insight-meta" id="state-detail-count"></span>
+            </div>
+            <div class="reports-table-wrapper">
+              <table class="reports-table">
+                <thead>
+                  <tr>
+                    <th>Submitted</th>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>Platform</th>
+                    <th>Link</th>
+                  </tr>
+                </thead>
+                <tbody id="state-detail-tbody">
+                  <tr class="empty-row">
+                    <td colspan="5">Select a state to load content</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <div class="reports-table-wrapper">
@@ -413,6 +557,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="config.js"></script>
