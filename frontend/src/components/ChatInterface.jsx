@@ -334,6 +334,13 @@ function ChatInterface({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="chat-rec-action-btn primary"
+                                onClick={() => {
+                                  if (window.heap) window.heap.track('Chat Recommendation Clicked', {
+                                    content_type: type,
+                                    content_title: title,
+                                    link_type: 'live'
+                                  });
+                                }}
                               >
                                 View Live <ExternalLink size={12} />
                               </a>
@@ -344,6 +351,13 @@ function ChatInterface({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="chat-rec-action-btn"
+                                onClick={() => {
+                                  if (window.heap) window.heap.track('Chat Recommendation Clicked', {
+                                    content_type: type,
+                                    content_title: title,
+                                    link_type: 'download'
+                                  });
+                                }}
                               >
                                 <Download size={12} /> Download
                               </a>
