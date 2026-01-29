@@ -1077,18 +1077,71 @@ IMPORTANT RULES:
       const parsed = JSON.parse(jsonMatch[0]);
       console.log('Conversational AI result:', parsed);
 
+      let recommendations = parsed.recommendations || [];
+
+      // FALLBACK: If AI didn't populate recommendations array but mentioned titles in text,
+      // extract them and match against available content
+      if (recommendations.length === 0 && availableContent.length > 0) {
+        console.log('[Chat] Empty recommendations array - attempting to extract from response text');
+
+        // Extract titles mentioned in bold markdown: **"Title"** or **Title**
+        const boldTitleMatches = (parsed.response || content).match(/\*\*"?([^"*]+)"?\*\*/g) || [];
+        const extractedTitles = boldTitleMatches.map(m => m.replace(/\*\*/g, '').replace(/"/g, '').trim());
+
+        console.log('[Chat] Extracted titles from text:', extractedTitles);
+
+        // Match extracted titles against available content using fuzzy matching
+        const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
+
+        for (const extractedTitle of extractedTitles) {
+          const titleNorm = normalizeForMatch(extractedTitle);
+          if (titleNorm.length < 10) continue; // Skip very short matches
+
+          const matchedItem = availableContent.find(item => {
+            const itemTitleNorm = normalizeForMatch(item.title);
+            return itemTitleNorm === titleNorm ||
+                   itemTitleNorm.includes(titleNorm) ||
+                   titleNorm.includes(itemTitleNorm);
+          });
+
+          if (matchedItem && !recommendations.some(r => r.title === matchedItem.title)) {
+            recommendations.push({
+              title: matchedItem.title,
+              reason: 'Mentioned in response'
+            });
+          }
+        }
+
+        // If still no recommendations, add top content items as fallback
+        if (recommendations.length === 0) {
+          console.log('[Chat] No title matches found - adding top available content as fallback');
+          recommendations = availableContent.slice(0, 5).map(item => ({
+            title: item.title,
+            reason: `Relevant ${item.type} for your query`
+          }));
+        }
+
+        console.log('[Chat] Final recommendations after fallback:', recommendations);
+      }
+
       return {
         response: parsed.response || content,
-        recommendations: parsed.recommendations || [],
+        recommendations: recommendations,
         followUpQuestions: parsed.followUpQuestions || [],
         aiContent: content // Store raw for context continuity
       };
     }
 
     // Fallback if JSON parsing fails - use raw response
+    // Try to add content as recommendations anyway
+    const fallbackRecs = availableContent.slice(0, 5).map(item => ({
+      title: item.title,
+      reason: `Relevant ${item.type}`
+    }));
+
     return {
       response: content,
-      recommendations: [],
+      recommendations: fallbackRecs,
       aiContent: content
     };
 
