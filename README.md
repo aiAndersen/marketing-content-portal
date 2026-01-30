@@ -145,6 +145,52 @@ All services have generous free tiers:
 - Row Level Security (RLS) can be enabled in Supabase
 - CORS configured for your domain only
 
+## 🔄 Development Workflow
+
+We use a three-tier deployment pipeline:
+
+```
+Local Dev → Staging → Production
+    ↓          ↓          ↓
+npm run dev   staging    main branch
+              branch
+```
+
+| Environment | Branch | URL |
+|-------------|--------|-----|
+| Local | any | `localhost:5173` |
+| Staging | `staging` | `staging-*.vercel.app` |
+| Production | `main` | `*.vercel.app` |
+
+### Quick Start for Developers
+
+```bash
+# Clone and set up
+git clone https://github.com/aiAndersen/marketing-content-portal.git
+cd marketing-content-portal
+
+# Start from staging branch
+git checkout staging
+
+# Create feature branch
+git checkout -b feature/your-feature
+
+# Install and run locally
+cd frontend && npm install && npm run dev
+
+# After changes, push to staging for testing
+git checkout staging
+git merge feature/your-feature
+git push origin staging  # → Auto-deploys to staging
+
+# Promote to production
+git checkout main
+git merge staging
+git push origin main  # → Auto-deploys to production
+```
+
+See [VERCEL-SETUP.md](./VERCEL-SETUP.md) for detailed Vercel configuration and troubleshooting.
+
 ## 📱 Features
 
 - ✅ Natural language search
