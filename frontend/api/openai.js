@@ -30,14 +30,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { messages, model, max_tokens, temperature } = req.body || {};
+    const body = req.body || {};
+    const { messages, model, max_tokens, temperature } = body;
 
     // Validate required fields
     if (!messages || !Array.isArray(messages)) {
+      console.error('Invalid request body:', JSON.stringify(body).substring(0, 200));
       return res.status(400).json({ error: 'Invalid request: messages array required' });
     }
 
-    // Make request to OpenAI using native fetch (Node 18+)
+    // Make request to OpenAI
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
