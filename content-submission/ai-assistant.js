@@ -47,16 +47,40 @@ National (for nationwide content) or US state abbreviations: TX, CA, NY, FL, IL,
 
 RULES:
 1. Extract ALL fields you can identify
-2. If given a YouTube URL, set platform to "YouTube" and type to "Video"
-3. If given a HubSpot URL or schoolinks.com URL, set platform to "Website"
-4. For URLs, the live_link should be the public-facing URL
-5. Generate a compelling 2-3 sentence summary based on the content
-6. Suggest relevant tags (education, college, career, counselors, students, K-12, work-based learning, etc.)
-7. Default state to "National" unless a specific state/district is mentioned
-8. Clean up titles - proper capitalization, make them engaging
-9. Infer content type from context (case study = Customer Story, whitepaper = Ebook, etc.)
-10. If Extracted Content is provided, use it to generate the summary and tags
-11. Always spell the brand name as "SchooLinks" (capital S and L)
+2. YOUTUBE VIDEO CATEGORIZATION (CRITICAL):
+   - YouTube Shorts (youtube.com/shorts/) = type "Video Clip"
+   - Regular YouTube videos = type "Video"
+   - Always set platform to "YouTube" for any YouTube URL
+3. For YouTube videos, use the ACTUAL video title from YouTube (provided in YouTube Title field)
+4. YOUTUBE SUMMARY GENERATION (in order of priority):
+   - If YouTube Description is provided, use it for the summary
+   - If no description but transcript is provided, generate summary from transcript content
+   - If neither available, create a brief factual summary from the title only
+   - NEVER make up details not present in the provided content
+5. If YouTube Description or transcript is provided, analyze it to:
+   - Extract relevant TAGS (topics, themes, keywords from the actual content)
+   - Identify STATE/REGION if any state, city, or district is mentioned
+6. HUBSPOT URL HANDLING (CRITICAL):
+   - Any URL containing "hubspot" = platform "HubSpot"
+   - HubSpot PDF URLs (.pdf in hubspot URL):
+     - Type should be "1 Pager" OR "Ebook" based on content analysis
+     - Brief/focused on one topic/single page = "1 Pager"
+     - Comprehensive guide/multiple sections = "Ebook"
+   - ONLY extract tags from ACTUAL PDF content - do NOT use generic education tags
+   - If no meaningful tags can be extracted from content, use minimal or empty tags
+7. If given a schoolinks.com URL, set platform to "Website"
+8. For URLs, the live_link should be the public-facing URL
+9. Suggest relevant tags based on ACTUAL content (not generic education tags)
+10. Default state to "National" unless a specific state/district is mentioned
+11. Clean up titles - proper capitalization, make them engaging
+12. Infer content type from context (case study = Customer Story, whitepaper = Ebook, etc.)
+13. Always spell the brand name as "SchooLinks" (capital S and L)
+
+STATE DETECTION HINTS:
+- Look for state names (Texas, California, New York, etc.)
+- Look for major cities (Austin, Houston, Los Angeles, Chicago, Atlanta, etc.)
+- Look for school district names (often include city/state: "Austin ISD", "Denver Public Schools")
+- Look for state abbreviations in the content
 
 Return ONLY valid JSON in this exact format:
 {
@@ -206,23 +230,38 @@ function extractUrls(text) {
 function getUrlType(url) {
   const lowerUrl = url.toLowerCase();
 
+  if (lowerUrl.includes('youtube.com/shorts/')) {
+    return 'youtube-short';
+  }
   if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
     return 'youtube';
   }
   if (lowerUrl.includes('vimeo.com')) {
     return 'vimeo';
   }
+  // Check HubSpot PDF first (before generic PDF check)
+  if (lowerUrl.includes('hubspot') && lowerUrl.includes('.pdf')) {
+    return 'hubspot-pdf';
+  }
+  if (lowerUrl.includes('hubspot')) {
+    return 'hubspot';
+  }
   if (lowerUrl.includes('.pdf')) {
     return 'pdf';
   }
-  if (lowerUrl.includes('hubspot') || lowerUrl.includes('schoolinks.com')) {
+  if (lowerUrl.includes('schoolinks.com')) {
     return 'website';
   }
   return 'webpage';
 }
 
+function isYouTubeShort(url) {
+  return url.toLowerCase().includes('youtube.com/shorts/');
+}
+
 function extractYouTubeId(url) {
   const patterns = [
+    /youtube\.com\/shorts\/([^&\s?]+)/,
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?]+)/,
     /youtube\.com\/v\/([^&\s?]+)/
   ];
@@ -259,6 +298,12 @@ async function fetchYouTubeMetadata(url) {
     console.warn('YouTube metadata fetch failed:', error);
     return null;
   }
+}
+
+async function fetchYouTubeDescription() {
+  // YouTube descriptions cannot be fetched reliably from browser due to CORS
+  // The AI will use transcript or title to generate summaries instead
+  return null;
 }
 
 async function fetchYouTubeTranscript(videoId) {
@@ -428,22 +473,49 @@ async function parseWithAI(userInput) {
 
     for (const url of urls) {
       const type = getUrlType(url);
-      const ytId = type === 'youtube' ? extractYouTubeId(url) : null;
+      const isShort = type === 'youtube-short';
+      const isYouTube = type === 'youtube' || type === 'youtube-short';
+      const ytId = isYouTube ? extractYouTubeId(url) : null;
 
-      if (type === 'youtube' && ytId) {
-        const [metadata, transcript] = await Promise.all([
+      if (isYouTube && ytId) {
+        // Fetch metadata, description, and transcript in parallel
+        const [metadata, description, transcript] = await Promise.all([
           fetchYouTubeMetadata(url),
+          fetchYouTubeDescription(ytId),
           fetchYouTubeTranscript(ytId)
         ]);
 
-        const metaDetails = metadata?.title
-          ? ` Title: "${metadata.title}".`
-          : '';
-        urlContexts.push(`[YouTube Video URL: ${url}.${metaDetails} Set type to "Video" and platform to "YouTube".]`);
+        const videoType = isShort ? 'Video Clip' : 'Video';
+        const titleInfo = metadata?.title ? `\nYouTube Title: "${metadata.title}"` : '';
+        const descInfo = description ? `\nYouTube Description: "${truncateText(description, 2000)}"` : '';
+
+        urlContexts.push(`[YouTube ${isShort ? 'Short' : 'Video'} URL: ${url}. Set type to "${videoType}" and platform to "YouTube".${titleInfo}${descInfo}]`);
 
         if (transcript) {
-          extractedContexts.push(`YouTube transcript (partial): ${truncateText(transcript, 12000)}`);
+          extractedContexts.push(`YouTube transcript (use this for summary generation):\n${truncateText(transcript, 12000)}`);
         }
+
+        // Add explicit instruction for AI to use the YouTube title
+        if (metadata?.title) {
+          extractedContexts.push(`IMPORTANT: Use the YouTube title "${metadata.title}" as the content title.`);
+        }
+        if (description) {
+          extractedContexts.push(`IMPORTANT: Use the YouTube description to generate the summary. Also analyze it to extract relevant tags and identify any state/region mentioned.`);
+        } else if (transcript) {
+          extractedContexts.push(`IMPORTANT: No YouTube description was available. Generate the summary based on the transcript content above. Extract tags and state/region from the transcript.`);
+        } else {
+          extractedContexts.push(`IMPORTANT: No YouTube description or transcript available. Generate a brief summary based on the title. Keep tags minimal and factual based only on the title.`);
+        }
+      } else if (type === 'hubspot-pdf') {
+        urlContexts.push(`[HubSpot PDF URL: ${url}. Set platform to "HubSpot". Type should be "1 Pager" or "Ebook" based on content length/depth.]`);
+        const pdfText = await extractPdfText(url);
+        if (pdfText) {
+          extractedContexts.push(`HubSpot PDF Content (analyze for tags and type):\n${truncateText(pdfText, 12000)}`);
+          extractedContexts.push(`IMPORTANT: Extract tags ONLY from the actual content above. Do NOT use generic tags like "college readiness", "student empowerment", or "counselor" unless explicitly mentioned in the PDF.`);
+          extractedContexts.push(`IMPORTANT: Determine type based on content - brief/single-topic = "1 Pager", comprehensive guide with multiple sections = "Ebook".`);
+        }
+      } else if (type === 'hubspot') {
+        urlContexts.push(`[HubSpot URL: ${url}. Set platform to "HubSpot".]`);
       } else if (type === 'pdf') {
         urlContexts.push(`[PDF Document URL: ${url} - This might be an Ebook, 1 Pager, or Asset]`);
         const pdfText = await extractPdfText(url);
@@ -530,9 +602,17 @@ function fallbackParse(input) {
 
     // Detect platform from URL
     const urlType = getUrlType(urls[0]);
-    if (urlType === 'youtube') {
+    if (urlType === 'youtube-short') {
+      result.fields.platform = { value: 'YouTube', confidence: 0.95 };
+      result.fields.type = { value: 'Video Clip', confidence: 0.95 };
+    } else if (urlType === 'youtube') {
       result.fields.platform = { value: 'YouTube', confidence: 0.95 };
       result.fields.type = { value: 'Video', confidence: 0.9 };
+    } else if (urlType === 'hubspot-pdf') {
+      result.fields.platform = { value: 'HubSpot', confidence: 0.95 };
+      result.fields.type = { value: 'Ebook', confidence: 0.7 }; // Default to Ebook, AI will refine
+    } else if (urlType === 'hubspot') {
+      result.fields.platform = { value: 'HubSpot', confidence: 0.95 };
     } else if (urlType === 'website') {
       result.fields.platform = { value: 'Website', confidence: 0.8 };
     }
@@ -712,9 +792,11 @@ async function handleParse() {
 
   // Track AI analyze in Heap
   if (window.heap) {
+    const urlType = urls.length > 0 ? getUrlType(urls[0]) : 'text';
     heap.track('AI Analyze Clicked', {
-      input_type: urls.length > 0 ? getUrlType(urls[0]) : 'text',
-      has_url: urls.length > 0
+      input_type: urlType,
+      has_url: urls.length > 0,
+      is_youtube_short: urlType === 'youtube-short'
     });
   }
 
@@ -726,8 +808,14 @@ async function handleParse() {
   addMessage('user', userInput);
   if (urls.length > 0) {
     const urlType = getUrlType(urls[0]);
-    if (urlType === 'youtube') {
-      addMessage('assistant', '🎬 Transcribing YouTube video...');
+    if (urlType === 'youtube-short') {
+      addMessage('assistant', '🎬 Analyzing YouTube Short...');
+    } else if (urlType === 'youtube') {
+      addMessage('assistant', '🎬 Fetching YouTube video details...');
+    } else if (urlType === 'hubspot-pdf') {
+      addMessage('assistant', '📄 Analyzing HubSpot PDF...');
+    } else if (urlType === 'hubspot') {
+      addMessage('assistant', '🔗 Analyzing HubSpot content...');
     } else if (urlType === 'pdf') {
       addMessage('assistant', '📄 Extracting PDF text...');
     } else {
