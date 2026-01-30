@@ -707,8 +707,10 @@ async function handleParse() {
     return;
   }
 
-  // Track AI analyze in Heap
+  // Detect URLs for user feedback
   const urls = extractUrls(userInput);
+
+  // Track AI analyze in Heap
   if (window.heap) {
     heap.track('AI Analyze Clicked', {
       input_type: urls.length > 0 ? getUrlType(urls[0]) : 'text',
@@ -722,9 +724,6 @@ async function handleParse() {
   elements.parseLoading.classList.remove('hidden');
 
   addMessage('user', userInput);
-
-  // Detect URLs for user feedback
-  const urls = extractUrls(userInput);
   if (urls.length > 0) {
     const urlType = getUrlType(urls[0]);
     if (urlType === 'youtube') {
