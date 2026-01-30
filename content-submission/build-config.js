@@ -1,15 +1,28 @@
 /**
  * Build script that generates config.js from environment variables
  * Used by Vercel during deployment
+ *
+ * SECURITY: All secrets must be set via environment variables
+ * Never commit hardcoded API keys to this file
  */
 
 const fs = require('fs');
 
+// Validate required environment variables
+const requiredEnvVars = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'OPENAI_API_KEY'];
+const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+
+if (missingVars.length > 0) {
+    console.warn(`WARNING: Missing environment variables: ${missingVars.join(', ')}`);
+    console.warn('The app may not function correctly without these.');
+}
+
 const config = `// Auto-generated config from environment variables
+// SECURITY: This file should be gitignored - never commit secrets
 // Supabase Configuration
 const SUPABASE_CONFIG = {
-    url: '${process.env.VITE_SUPABASE_URL || 'https://wbjkncpkucmtjusfczdy.supabase.co'}',
-    anonKey: '${process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndiamtuY3BrdWNtdGp1c2ZjemR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxODc2MzgsImV4cCI6MjA4NDc2MzYzOH0.q1wcPkR2sRYLlW1EVG8KxnoBwX7U8ZdIVQwpSPHZZPE'}'
+    url: '${process.env.VITE_SUPABASE_URL || ''}',
+    anonKey: '${process.env.VITE_SUPABASE_ANON_KEY || ''}'
 };
 
 // OpenAI Configuration
@@ -23,3 +36,6 @@ const OPENAI_CONFIG = {
 
 fs.writeFileSync('config.js', config);
 console.log('Generated config.js from environment variables');
+if (missingVars.length === 0) {
+    console.log('All required environment variables are set.');
+}
