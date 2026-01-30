@@ -6,6 +6,16 @@
  */
 
 export default async function handler(req, res) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -16,18 +26,18 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     console.error('OPENAI_API_KEY environment variable not set');
-    return res.status(500).json({ error: 'Server configuration error' });
+    return res.status(500).json({ error: 'Server configuration error: API key not configured' });
   }
 
   try {
-    const { messages, model, max_tokens, temperature } = req.body;
+    const { messages, model, max_tokens, temperature } = req.body || {};
 
     // Validate required fields
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Invalid request: messages array required' });
     }
 
-    // Make request to OpenAI
+    // Make request to OpenAI using native fetch (Node 18+)
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -54,7 +64,7 @@ export default async function handler(req, res) {
     return res.status(200).json(data);
 
   } catch (error) {
-    console.error('Proxy error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Proxy error:', error.message, error.stack);
+    return res.status(500).json({ error: `Internal server error: ${error.message}` });
   }
 }
