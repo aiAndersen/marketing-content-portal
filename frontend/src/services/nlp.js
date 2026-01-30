@@ -4,7 +4,7 @@
  * Handles misspellings, synonyms, and natural language understanding
  */
 
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+// OpenAI API key is now handled server-side via /api/openai proxy
 
 /**
  * Autocorrect common misspellings before AI processing
@@ -396,17 +396,12 @@ export async function convertNaturalLanguageToQuery(naturalQuery, filters = {}) 
   // Apply autocorrect before AI processing
   const correctedQuery = autocorrectQuery(naturalQuery);
 
-  if (!OPENAI_API_KEY) {
-    console.log('No OpenAI API key, using basic keyword search');
-    return parseQueryKeywords(correctedQuery, filters);
-  }
-
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Use serverless proxy to keep API key secure
+    const response = await fetch('/api/openai', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -546,7 +541,7 @@ IMPORTANT: When primaryIntent is "state", do NOT include state names or generic 
  * IMPORTANT: Uses TITLES (not IDs) for recommendation matching to avoid index mismatch bugs
  */
 export async function rankResultsByRelevance(results, userQuery, maxResults = 50) {
-  if (!OPENAI_API_KEY || !results || results.length === 0) {
+  if (!results || results.length === 0) {
     return { rankedResults: results, explanation: null };
   }
 
@@ -566,11 +561,11 @@ export async function rankResultsByRelevance(results, userQuery, maxResults = 50
   }));
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Use serverless proxy to keep API key secure
+    const response = await fetch('/api/openai', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -904,12 +899,6 @@ export async function processConversationalQuery(
     maxContentForContext = 100
   } = typeof options === 'number' ? { maxContentForContext: options } : options;
 
-  if (!OPENAI_API_KEY) {
-    return {
-      response: "AI assistant unavailable. Please use the search bar instead.",
-      recommendations: []
-    };
-  }
 
   // Detect if this is a question about SchooLinks vs a content search
   const queryType = detectQueryType(userMessage);
@@ -1041,11 +1030,11 @@ IMPORTANT RULES:
   ];
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Use serverless proxy to keep API key secure
+    const response = await fetch('/api/openai', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',

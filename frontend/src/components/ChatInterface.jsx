@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Sparkles, User, ExternalLink, RefreshCw, FileText, Download, Mic, MicOff, Loader2 } from 'lucide-react';
 
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+// OpenAI API key is now handled server-side via /api/whisper proxy
 
 /**
  * Custom hook for OpenAI Whisper speech-to-text
@@ -66,11 +66,9 @@ function useWhisperSpeechToText() {
           formData.append('model', 'whisper-1');
           formData.append('language', 'en');
 
-          const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          // Use serverless proxy to keep API key secure
+          const response = await fetch('/api/whisper', {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
             body: formData
           });
 
@@ -93,7 +91,7 @@ function useWhisperSpeechToText() {
     });
   }, []);
 
-  const isSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && OPENAI_API_KEY);
+  const isSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
   return {
     isRecording,
