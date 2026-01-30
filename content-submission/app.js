@@ -905,13 +905,8 @@ async function sendReportAIMessage() {
 
   try {
     let responseText = '';
-    if (!OPENAI_CONFIG?.apiKey) {
-      responseText = generateLocalInsights(inputText, context);
-      setReportAIStatus('Local insights');
-    } else {
-      responseText = await askReportAI(inputText, context);
-      setReportAIStatus('Ready');
-    }
+    responseText = await askReportAI(inputText, context);
+    setReportAIStatus('Ready');
     addReportAIMessage('assistant', responseText);
   } catch (error) {
     console.error('Report AI error:', error);
@@ -929,14 +924,14 @@ async function askReportAI(question, context) {
 Use only the provided context. Do not fabricate numbers.
 Be concise and actionable. Use bullets when helpful. If data is missing, say what to check.`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Use serverless proxy to keep API key secure
+  const response = await fetch('/api/openai', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_CONFIG.apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: OPENAI_CONFIG.model,
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         {

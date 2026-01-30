@@ -456,10 +456,6 @@ async function ocrPdfFile(file, maxPages = 3) {
 // ============================================
 
 async function parseWithAI(userInput) {
-  if (!OPENAI_CONFIG.apiKey) {
-    throw new Error('OpenAI API key not configured');
-  }
-
   const normalizedInput = normalizeBrandName(userInput);
 
   // Extract URLs and add context
@@ -536,20 +532,20 @@ async function parseWithAI(userInput) {
     }
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Use serverless proxy to keep API key secure
+  const response = await fetch('/api/openai', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_CONFIG.apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: OPENAI_CONFIG.model,
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: enhancedPrompt }
       ],
-      temperature: OPENAI_CONFIG.temperature,
-      max_tokens: OPENAI_CONFIG.maxTokens
+      temperature: 0.3,
+      max_tokens: 1000
     })
   });
 

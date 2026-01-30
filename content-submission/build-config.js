@@ -2,14 +2,14 @@
  * Build script that generates config.js from environment variables
  * Used by Vercel during deployment
  *
- * SECURITY: All secrets must be set via environment variables
- * Never commit hardcoded API keys to this file
+ * SECURITY: OpenAI API key is handled server-side via /api/openai
+ * Only Supabase public credentials are exposed to the browser
  */
 
 const fs = require('fs');
 
-// Validate required environment variables
-const requiredEnvVars = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'OPENAI_API_KEY'];
+// Validate required environment variables (Supabase only - OpenAI is server-side)
+const requiredEnvVars = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
 const missingVars = requiredEnvVars.filter(v => !process.env[v]);
 
 if (missingVars.length > 0) {
@@ -18,19 +18,10 @@ if (missingVars.length > 0) {
 }
 
 const config = `// Auto-generated config from environment variables
-// SECURITY: This file should be gitignored - never commit secrets
-// Supabase Configuration
+// Supabase Configuration (public credentials only)
 const SUPABASE_CONFIG = {
     url: '${process.env.VITE_SUPABASE_URL || ''}',
     anonKey: '${process.env.VITE_SUPABASE_ANON_KEY || ''}'
-};
-
-// OpenAI Configuration
-const OPENAI_CONFIG = {
-    apiKey: '${process.env.OPENAI_API_KEY || ''}',
-    model: 'gpt-4o-mini',
-    maxTokens: 1000,
-    temperature: 0.3
 };
 `;
 
