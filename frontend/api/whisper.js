@@ -5,13 +5,7 @@
  * keeping the API key secure on the server side.
  */
 
-export const config = {
-  api: {
-    bodyParser: false
-  }
-};
-
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -69,4 +63,11 @@ export default async function handler(req, res) {
     console.error('Whisper proxy error:', error.message, error.stack);
     return res.status(500).json({ error: `Internal server error: ${error.message}` });
   }
-}
+};
+
+// Disable body parsing for multipart form data
+module.exports.config = {
+  api: {
+    bodyParser: false
+  }
+};
