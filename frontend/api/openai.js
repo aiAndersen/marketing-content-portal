@@ -39,6 +39,33 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid request: messages array required' });
     }
 
+    const modelToUse = model || 'gpt-4o-mini';
+
+    // gpt-5, o1, o3, o4 models require max_completion_tokens instead of max_tokens
+    const usesNewTokenParam = /^(gpt-5|o[134])/.test(modelToUse);
+    // gpt-5-mini doesn't support custom temperature (only default 1)
+    const noCustomTemp = /^gpt-5-mini/.test(modelToUse);
+
+    // Build request body with correct parameters per model
+    const requestBody = {
+      model: modelToUse,
+      messages,
+    };
+
+    // Only add temperature if model supports it
+    if (!noCustomTemp) {
+      requestBody.temperature = temperature ?? 0.3;
+    }
+
+    // Use appropriate token limit parameter
+    // Note: gpt-5-mini uses significant reasoning tokens internally,
+    // so we need higher limits (500+ just for simple queries)
+    if (usesNewTokenParam) {
+      requestBody.max_completion_tokens = max_tokens || 2000;
+    } else {
+      requestBody.max_tokens = max_tokens || 1000;
+    }
+
     // Make request to OpenAI
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -46,12 +73,7 @@ module.exports = async function handler(req, res) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: model || 'gpt-4o-mini',
-        messages,
-        max_tokens: max_tokens || 1000,
-        temperature: temperature ?? 0.3
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {

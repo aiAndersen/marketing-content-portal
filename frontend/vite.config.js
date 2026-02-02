@@ -22,6 +22,13 @@ function heapAnalyticsPlugin() {
 export default defineConfig({
   plugins: [react(), heapAnalyticsPlugin()],
   server: {
-    port: 3000
+    port: 3000,
+    proxy: {
+      // Proxy /api requests to local dev server for testing
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      }
+    }
   }
 })

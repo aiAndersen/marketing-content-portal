@@ -8,11 +8,43 @@ The Marketing Content Portal uses a multi-model strategy to balance cost and qua
 
 ## Model Configuration
 
-| Model | Cost (per 1M tokens) | Use Case |
-|-------|---------------------|----------|
-| `gpt-4o-mini` | $0.15 / $0.60 | Simple parsing, basic queries |
-| `gpt-5-mini` | $0.25 / $2.00 | Standard searches, topic understanding |
-| `gpt-5.2` | $1.75 / $14.00 | Complex sales questions, comparisons |
+### Current Models in Use (Tested 2026-02-02)
+
+| Model ID | Tier | Input/Cached/Output (per 1M) | Use Case | Status |
+|----------|------|------------------------------|----------|--------|
+| `gpt-4o-mini` | QUERY_PARSER | $0.15 / $0.075 / $0.60 | Simple parsing, basic queries | ✅ Working |
+| `gpt-5-mini` | STANDARD | $0.25 / $0.025 / $2.00 | Standard searches, topic understanding | ✅ Working |
+| `gpt-5.2` | ADVANCED | $1.75 / $0.175 / $14.00 | Complex sales questions, state context | ✅ Working |
+
+**Important:** gpt-5 and o-series models require `max_completion_tokens` instead of `max_tokens`.
+This is handled automatically by the API proxy (`frontend/api/openai.js`).
+
+### Available OpenAI Models Reference
+
+**Frontier / General (recommended defaults):**
+| Model ID | Best For | Price (input/cached/output per 1M) |
+|----------|----------|-----------------------------------|
+| `gpt-5.2` | Best overall for coding + agentic workflows | $1.75 / $0.175 / $14.00 |
+| `gpt-5-mini` | Cheaper GPT-5 class for well-defined tasks | $0.25 / $0.025 / $2.00 |
+| `gpt-5-nano` | Cheapest GPT-5; summarization/classification | $0.05 / $0.005 / $0.40 |
+| `gpt-4.1` | Smartest non-reasoning; tool calling | $2.00 / $0.50 / $8.00 |
+| `gpt-4o` | Versatile omni flagship (text+image) | $2.50 / $1.25 / $10.00 |
+| `gpt-4o-mini` | Fast/cheap for focused tasks | $0.15 / $0.075 / $0.60 |
+
+**Reasoning-focused (o-series):**
+| Model ID | Best For | Price |
+|----------|----------|-------|
+| `o3` | Deep multi-step reasoning | $2.00 / $0.50 / $8.00 |
+| `o3-mini` | Small reasoning; structured outputs | $1.10 / $0.55 / $4.40 |
+| `o4-mini` | Fast efficient reasoning; coding + visual | $1.10 / $0.275 / $4.40 |
+
+### Fallback Strategy
+
+If a model is unavailable (403/404), the system falls back:
+```
+gpt-5.2 → gpt-4o → gpt-4o-mini
+gpt-5-mini → gpt-4o-mini
+```
 
 ---
 

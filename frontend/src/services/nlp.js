@@ -9,17 +9,84 @@
 /**
  * Multi-Model Strategy Configuration
  * Different models for different query complexities to balance cost and quality
+ * See: SchooLinks Baseline Context/OpenAI_Models_Reference.md for full model list
+ *
+ * TESTED 2026-02-02: All models work ✅
+ * Note: gpt-5 and o-series require max_completion_tokens (handled in API proxy)
  */
 const AI_MODELS = {
   // Fast, cheap - for simple query parsing
-  QUERY_PARSER: 'gpt-4o-mini',      // $0.15/$0.60 per 1M tokens
+  QUERY_PARSER: 'gpt-4o-mini',      // $0.15/$0.60 per 1M tokens ✅
 
-  // Balanced - for standard searches
-  STANDARD: 'gpt-5-mini',           // $0.25/$2.00 per 1M tokens
+  // Balanced - for standard searches (gpt-5-mini is 10x cheaper than gpt-4o!)
+  STANDARD: 'gpt-5-mini',           // $0.25/$2.00 per 1M tokens ✅
 
-  // Best reasoning - for complex sales questions
-  ADVANCED: 'gpt-5.2',              // $1.75/$14.00 per 1M tokens
+  // Best reasoning - for complex sales questions, state context
+  ADVANCED: 'gpt-5.2',              // $1.75/$14.00 per 1M tokens ✅
 };
+
+/**
+ * Fallback models if primary model is unavailable (403/404 errors)
+ * Order: try primary first, then fallbacks in sequence
+ */
+const MODEL_FALLBACKS = {
+  'gpt-5.2': ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini'],
+  'gpt-5-mini': ['gpt-4o', 'gpt-4o-mini'],
+  'gpt-4.1': ['gpt-4o', 'gpt-4o-mini'],
+  'gpt-4o': ['gpt-4o-mini'],
+  'gpt-4o-mini': [],  // No fallback needed - this is our baseline
+};
+
+/**
+ * Make an OpenAI API call with automatic fallback on model errors
+ * @param {object} requestBody - The request body for /api/openai
+ * @returns {Promise<object>} - The API response data
+ */
+async function callOpenAIWithFallback(requestBody) {
+  const primaryModel = requestBody.model;
+  const modelsToTry = [primaryModel, ...(MODEL_FALLBACKS[primaryModel] || [])];
+
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    try {
+      const response = await fetch('/api/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...requestBody, model })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (model !== primaryModel) {
+          console.log(`[Model Fallback] Used ${model} instead of ${primaryModel}`);
+        }
+        return data;
+      }
+
+      // Check if it's a model-specific error (404 = model not found, 403 = no access)
+      if (response.status === 404 || response.status === 403) {
+        console.warn(`[Model Fallback] ${model} unavailable (${response.status}), trying next...`);
+        lastError = new Error(`Model ${model} unavailable: ${response.status}`);
+        continue;  // Try next model
+      }
+
+      // Other errors (400, 500, etc.) - don't fallback, throw immediately
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error ${response.status}: ${errorText}`);
+
+    } catch (err) {
+      if (err.message.includes('unavailable')) {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // All models failed
+  throw lastError || new Error('All models unavailable');
+}
 
 /**
  * State-specific context hints for enhanced AI prompts
