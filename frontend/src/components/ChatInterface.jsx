@@ -329,15 +329,22 @@ function ChatInterface({
 
                       const findByFuzzyTitle = (items) => (items || []).find(r => {
                         const itemTitleNorm = normalizeForMatch(r.title);
-                        // Exact match
+
+                        // 1. Exact match
                         if (itemTitleNorm === recTitleNorm) return true;
-                        // Contains match
-                        if (itemTitleNorm.includes(recTitleNorm) || recTitleNorm.includes(itemTitleNorm)) return true;
-                        // Key words match - if 3+ key words match, consider it a match
+
+                        // 2. Substantial substring match (min 15 chars to avoid short false positives)
+                        const minLen = Math.min(itemTitleNorm.length, recTitleNorm.length);
+                        if (minLen > 15 && (itemTitleNorm.includes(recTitleNorm) || recTitleNorm.includes(itemTitleNorm))) {
+                          return true;
+                        }
+
+                        // 3. Stricter keyword match (4+ words AND 60%+ match ratio)
+                        // This prevents cross-matching similar titles like "Liberty Hill" vs "Pflugerville"
                         const itemKeyWords = getKeyWords(r.title);
                         const matchCount = recKeyWords.filter(w => itemKeyWords.includes(w)).length;
-                        if (matchCount >= 3) return true;
-                        return false;
+                        const matchRatio = matchCount / Math.max(recKeyWords.length, 1);
+                        return matchCount >= 4 && matchRatio >= 0.6;
                       });
 
                       const item = findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
@@ -362,8 +369,12 @@ function ChatInterface({
                             {state && <span className="chat-rec-state">{state}</span>}
                           </div>
                           <div className="chat-rec-card-title">{title}</div>
-                          {rec.reason && (
-                            <div className="chat-rec-card-reason">{rec.reason}</div>
+                          {(item?.summary || rec.reason) && (
+                            <div className="chat-rec-card-reason">
+                              {item?.summary
+                                ? (item.summary.length > 150 ? item.summary.substring(0, 150) + '...' : item.summary)
+                                : rec.reason}
+                            </div>
                           )}
                           <div className="chat-rec-card-actions">
                             {liveLink && (

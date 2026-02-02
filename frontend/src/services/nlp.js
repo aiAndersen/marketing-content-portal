@@ -7,6 +7,191 @@
 // OpenAI API key is now handled server-side via /api/openai proxy
 
 /**
+ * Multi-Model Strategy Configuration
+ * Different models for different query complexities to balance cost and quality
+ */
+const AI_MODELS = {
+  // Fast, cheap - for simple query parsing
+  QUERY_PARSER: 'gpt-4o-mini',      // $0.15/$0.60 per 1M tokens
+
+  // Balanced - for standard searches
+  STANDARD: 'gpt-5-mini',           // $0.25/$2.00 per 1M tokens
+
+  // Best reasoning - for complex sales questions
+  ADVANCED: 'gpt-5.2',              // $1.75/$14.00 per 1M tokens
+};
+
+/**
+ * State-specific context hints for enhanced AI prompts
+ * Quick reference terms for each state's CCR requirements
+ */
+const STATE_CONTEXT_HINTS = {
+  'TX': 'Texas: CCMR indicators, HB 5 endorsements, HB 773 IBC requirements, PGP plans, TEA CCMR Tracker',
+  'CO': 'Colorado: ICAP (Individual Career & Academic Plan), MyColoradoJourney, QCPF',
+  'MI': 'Michigan: EDP (Education Development Plan), MME assessments, Sixty by 30',
+  'WI': 'Wisconsin: ACP (Academic & Career Planning), PI 26 requirements, WBL criteria',
+  'NE': 'Nebraska: CCR Ready framework, Personal Learning Plans, Perkins V',
+  'UT': 'Utah: PCCR indicators, First Credential initiative, HB260',
+  'FL': 'Florida: Scholar designation, graduation pathways, career academies',
+  'CA': 'California: College/Career Indicator (CCI), A-G requirements, CTE pathways',
+  'NY': 'New York: CDOS credential, graduation pathways, CTE endorsements',
+  'OH': 'Ohio: graduation seals, career passport, OhioMeansJobs readiness seal',
+};
+
+/**
+ * Detect query complexity to route to appropriate AI model
+ * Enhanced routing based on query characteristics
+ * @param {string} query - The user's query
+ * @returns {'simple'|'standard'|'advanced'} - Complexity level
+ */
+function detectQueryComplexity(query) {
+  const q = query.toLowerCase();
+  const wordCount = q.split(/\s+/).filter(w => w.length > 0).length;
+
+  // SIMPLE: Short queries with basic filters only
+  // Keep in gpt-4o-mini if: <5 words, content type + basic filter, no comparison/why language
+  const simplePatterns = [
+    /^show\s+(me\s+)?(all\s+)?\w+s?$/i,              // "show me webinars"
+    /^\w+\s+content$/i,                              // "Texas content"
+    /^(videos?|webinars?|ebooks?|blogs?)\s+(from|about)\s+\w+$/i,  // "Videos from 2024"
+  ];
+  const isSimplePattern = simplePatterns.some(r => r.test(q));
+  const hasNoComplexLanguage = !/why|how|compare|vs|versus|better|should/i.test(q);
+
+  if (wordCount < 5 && hasNoComplexLanguage && isSimplePattern) {
+    console.log('[Model Selection] Query complexity: SIMPLE (short + basic filter)');
+    return 'simple';
+  }
+
+  // ADVANCED: Auto-route if query contains these high-complexity indicators
+  const advancedIndicators = [
+    // Competitor names
+    /\b(naviance|xello|ccgi|scoir|majorclarity|powerschool|kuder|youscience)\b/i,
+    // Comparison language
+    /\b(vs|versus|compared?\s+to|better\s+than|difference|alternative)\b/i,
+    // Why/How questions about SchooLinks
+    /\b(why\s+should|how\s+does\s+schoolinks|what\s+makes)\b/i,
+    // State legislation codes
+    /\b(hb\s*\d+|sb\s*\d+|ride\s+framework|ccmr|icap|ecap|pgp|ilp|hsbp)\b/i,
+    // ROI/business value with specifics
+    /\b(roi|cost\s+savings?|time\s+savings?|efficiency|budget)\b.*\b(proof|evidence|data|numbers?)\b/i,
+    // Multiple product features in one query
+    /(and|plus|\+|with|along\s+with).*(tracking|compliance|engagement|reporting)/i,
+    // Sales objection handling
+    /\b(objection|concern|pushback|address|overcome|migration|switch\s+from)\b/i,
+    // Evidence/proof requests
+    /\b(proof\s+points?|evidence|demonstrate|show\s+that)\b/i,
+  ];
+
+  const advancedCount = advancedIndicators.filter(r => r.test(q)).length;
+  if (advancedCount >= 1) {
+    console.log(`[Model Selection] Query complexity: ADVANCED (${advancedCount} advanced indicators matched)`);
+    return 'advanced';
+  }
+
+  // STANDARD: Multi-attribute filtering, topic understanding, moderate NLU
+  const standardIndicators = [
+    // Topic/theme understanding
+    /\b(about|explaining|regarding|related\s+to)\b/i,
+    // Persona-specific content
+    /\b(for\s+(counselors?|superintendents?|admins?|teachers?|principals?|cte|wbl))\b/i,
+    // Outcome-focused queries
+    /\b(improve|increase|track|measure|outcomes?|results?|success)\b/i,
+    // Feature-specific queries with context
+    /\b(fafsa|graduation|career|college|assessment|planning)\b.*\b(tracking|completion|readiness)\b/i,
+    // Multi-word descriptive queries
+    wordCount >= 6,
+  ];
+
+  const standardCount = standardIndicators.filter(r => typeof r === 'boolean' ? r : r.test(q)).length;
+  if (standardCount >= 1) {
+    console.log(`[Model Selection] Query complexity: STANDARD (${standardCount} standard indicators matched)`);
+    return 'standard';
+  }
+
+  // Default to simple for basic queries
+  console.log('[Model Selection] Query complexity: SIMPLE (default)');
+  return 'simple';
+}
+
+/**
+ * Log complex prompts to database for analysis and agent improvement
+ * Only logs prompts that use STANDARD or ADVANCED models
+ * @param {string} query - The user's query
+ * @param {string} complexity - 'simple' | 'standard' | 'advanced'
+ * @param {string} model - The model used
+ * @param {object} metadata - Additional context (detectedStates, queryType, etc.)
+ */
+async function logPromptForAnalysis(query, complexity, model, metadata = {}) {
+  // Only log standard and advanced queries (skip simple ones to reduce noise)
+  if (complexity === 'simple') return;
+
+  try {
+    // Import supabase dynamically to avoid circular dependencies
+    const { supabase } = await import('./supabase');
+
+    const logEntry = {
+      query: query,
+      complexity: complexity,
+      model_used: model,
+      detected_states: metadata.detectedStates || [],
+      query_type: metadata.queryType || 'search',
+      timestamp: new Date().toISOString(),
+      // Store matched indicators for analysis
+      matched_indicators: metadata.matchedIndicators || [],
+    };
+
+    // Insert into ai_prompt_logs table (will create if not exists via RLS)
+    const { error } = await supabase
+      .from('ai_prompt_logs')
+      .insert([logEntry]);
+
+    if (error) {
+      // Log error but don't fail the main flow
+      console.warn('[Prompt Logging] Failed to log prompt:', error.message);
+    } else {
+      console.log(`[Prompt Logging] Logged ${complexity} query for analysis`);
+    }
+  } catch (err) {
+    // Silent fail - logging shouldn't break the main functionality
+    console.warn('[Prompt Logging] Error:', err.message);
+  }
+}
+
+/**
+ * Get the appropriate model for a given function and query
+ * @param {'parser'|'ranker'|'chat'} functionType - Which function is calling
+ * @param {string} query - The user's query (for complexity detection)
+ * @returns {string} - Model name to use
+ */
+function getModelForQuery(functionType, query = '') {
+  if (functionType === 'parser') {
+    // Always use fast model for parsing
+    return AI_MODELS.QUERY_PARSER;
+  }
+
+  if (functionType === 'ranker') {
+    // Use standard model for ranking
+    return AI_MODELS.STANDARD;
+  }
+
+  if (functionType === 'chat') {
+    // Dynamic selection based on query complexity
+    const complexity = detectQueryComplexity(query);
+    switch (complexity) {
+      case 'advanced':
+        return AI_MODELS.ADVANCED;
+      case 'standard':
+        return AI_MODELS.STANDARD;
+      default:
+        return AI_MODELS.QUERY_PARSER;
+    }
+  }
+
+  return AI_MODELS.QUERY_PARSER;
+}
+
+/**
  * Autocorrect common misspellings before AI processing
  * Uses Levenshtein distance for fuzzy matching
  */
@@ -562,13 +747,14 @@ export async function rankResultsByRelevance(results, userQuery, maxResults = 50
 
   try {
     // Use serverless proxy to keep API key secure
+    // Model: STANDARD for balanced quality/cost in ranking
     const response = await fetch('/api/openai', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: getModelForQuery('ranker'),
         messages: [
           {
             role: 'system',
@@ -937,15 +1123,41 @@ For general questions: Use your SchooLinks knowledge to provide helpful context
 ` : '';
 
   // Build state-specific context section if available
-  const stateContextSection = stateContext && detectedStates.length > 0 ? `
+  // Include quick-reference hints for detected states
+  let stateContextSection = '';
+  if (detectedStates.length > 0) {
+    const stateHints = detectedStates
+      .filter(s => STATE_CONTEXT_HINTS[s])
+      .map(s => STATE_CONTEXT_HINTS[s])
+      .join('\n');
+
+    stateContextSection = `
 
 ## STATE-SPECIFIC CONTEXT FOR ${detectedStates.join(', ')}
 **IMPORTANT: Use this state-specific information when the user asks about ${detectedStates.join(' or ')} or related topics.**
 
-${stateContext}
+### Quick Reference (State Terminology):
+${stateHints || 'General state CCR requirements apply.'}
+
+${stateContext ? `### Detailed Context:\n${stateContext}` : ''}
+
+**INSTRUCTIONS:** Use state-specific terminology and prioritize state-relevant content in your recommendations.
 
 ---
-` : '';
+`;
+  }
+
+  // Determine which AI model to use based on query complexity
+  const queryComplexity = detectQueryComplexity(userMessage);
+  const selectedModel = getModelForQuery('chat', userMessage);
+  console.log(`[Chat] Using model: ${selectedModel} for query: "${userMessage.substring(0, 50)}..."`);
+
+  // Log complex prompts for analysis (async, non-blocking)
+  logPromptForAnalysis(userMessage, queryComplexity, selectedModel, {
+    detectedStates,
+    queryType: queryType.questionType,
+  });
+
 
   // Build conversation messages for OpenAI
   const messages = [
@@ -1031,13 +1243,14 @@ IMPORTANT RULES:
 
   try {
     // Use serverless proxy to keep API key secure
+    // Model is dynamically selected based on query complexity
     const response = await fetch('/api/openai', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: selectedModel,
         messages,
         temperature: 0.4,
         max_tokens: 2500  // Increased to allow for more recommendations
