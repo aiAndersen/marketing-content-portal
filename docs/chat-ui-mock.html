@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chat UI Mock - Marketing Content Portal</title>
+    <style>
+      :root {
+        --sl-black: #1e1a12;
+        --sl-yellow: #f5ec1e;
+        --sl-white: #ffffff;
+        --sl-linen: #fafaf0;
+        --sl-cream: #fbfbca;
+        --sl-olive: #aba515;
+        --sl-baby-blue: #d8edf1;
+        --sl-robins-egg: #b2dbe4;
+        --sl-marina: #2b7383;
+        --sl-gray-50: #fafafa;
+        --sl-gray-100: #f5f5f5;
+        --sl-gray-200: #e5e5e5;
+        --sl-gray-300: #d4d4d4;
+        --sl-gray-400: #a3a3a3;
+        --sl-gray-500: #8e8c88;
+        --sl-gray-600: #737373;
+        --sl-gray-700: #525252;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        background: var(--sl-linen);
+        color: var(--sl-black);
+        padding: 32px;
+      }
+
+      .mock-shell {
+        max-width: 980px;
+        margin: 0 auto;
+        background: var(--sl-white);
+        border: 2px solid var(--sl-black);
+        border-radius: 16px;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+        overflow: hidden;
+      }
+
+      .mock-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        background: var(--sl-black);
+        color: var(--sl-yellow);
+        border-bottom: 2px solid var(--sl-yellow);
+      }
+
+      .mock-header .title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+      }
+
+      .mock-header .subtitle {
+        font-size: 12px;
+        color: var(--sl-gray-300);
+      }
+
+      .mock-header .actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .mock-btn {
+        border: 1px solid var(--sl-yellow);
+        background: transparent;
+        color: var(--sl-yellow);
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+
+      .mock-body {
+        padding: 18px;
+        background: linear-gradient(180deg, var(--sl-linen) 0%, #fff 100%);
+      }
+
+      .msg {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        max-width: 86%;
+      }
+
+      .msg.user {
+        margin-left: auto;
+        flex-direction: row-reverse;
+      }
+
+      .avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .avatar.user {
+        background: var(--sl-marina);
+        color: white;
+      }
+
+      .avatar.ai {
+        background: var(--sl-yellow);
+        color: var(--sl-black);
+      }
+
+      .bubble {
+        background: var(--sl-white);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        border: 1px solid var(--sl-gray-200);
+      }
+
+      .msg.user .bubble {
+        background: var(--sl-marina);
+        color: white;
+        border: none;
+      }
+
+      .section {
+        margin-bottom: 12px;
+      }
+
+      .section:last-child {
+        margin-bottom: 0;
+      }
+
+      .section-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--sl-marina);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 6px;
+      }
+
+      .summary {
+        font-size: 15px;
+        line-height: 1.5;
+      }
+
+      .key-points {
+        list-style: none;
+        display: grid;
+        gap: 6px;
+      }
+
+      .key-points li {
+        background: var(--sl-gray-50);
+        border: 1px solid var(--sl-gray-200);
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .rec-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .rec-card {
+        background: #fff;
+        border: 1px solid var(--sl-gray-200);
+        border-radius: 12px;
+        padding: 10px 12px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
+
+      .rec-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 11px;
+        color: var(--sl-gray-600);
+      }
+
+      .rec-type {
+        background: var(--sl-yellow);
+        color: var(--sl-black);
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-weight: 700;
+      }
+
+      .rec-state {
+        background: var(--sl-baby-blue);
+        color: var(--sl-marina);
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-weight: 700;
+      }
+
+      .rec-title {
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+
+      .rec-reason {
+        font-size: 12px;
+        color: var(--sl-gray-600);
+        margin-bottom: 8px;
+      }
+
+      .rec-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .rec-btn {
+        font-size: 12px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--sl-gray-300);
+        background: var(--sl-gray-100);
+      }
+
+      .rec-btn.primary {
+        background: var(--sl-marina);
+        color: white;
+        border-color: var(--sl-marina);
+      }
+
+      .followups {
+        display: grid;
+        gap: 6px;
+      }
+
+      .followups .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--sl-gray-300);
+        background: var(--sl-gray-100);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        width: fit-content;
+      }
+
+      .input-row {
+        display: flex;
+        gap: 10px;
+        padding: 14px 16px;
+        border-top: 1px solid var(--sl-gray-200);
+        background: var(--sl-white);
+      }
+
+      .input-row input {
+        flex: 1;
+        border: 2px solid var(--sl-gray-300);
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+
+      .input-row button {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        background: var(--sl-yellow);
+      }
+
+      .hint {
+        margin: 12px 18px 0;
+        background: linear-gradient(135deg, var(--sl-yellow-50, #fefce8) 0%, var(--sl-baby-blue) 100%);
+        border: 1px solid var(--sl-yellow);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mock-shell">
+      <div class="mock-header">
+        <div>
+          <div class="title">AI Search Assistant</div>
+          <div class="subtitle">Built for sales reps. Clear, focused, and actionable.</div>
+        </div>
+        <div class="actions">
+          <button class="mock-btn">New Chat</button>
+        </div>
+      </div>
+
+      <div class="mock-body">
+        <div class="msg user">
+          <div class="avatar user">U</div>
+          <div class="bubble">
+            What makes SchooLinks different from Naviance?
+          </div>
+        </div>
+
+        <div class="msg ai">
+          <div class="avatar ai">AI</div>
+          <div class="bubble">
+            <div class="section">
+              <div class="section-title">Quick Answer</div>
+              <div class="summary">
+                SchooLinks is more modern and proactive than Naviance, with real-time data capture and readiness indicators that help counselors intervene earlier.
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Key Points</div>
+              <ul class="key-points">
+                <li>Student-first UI drives higher adoption with less training.</li>
+                <li>Real-time activity tracking replaces manual data entry.</li>
+                <li>KRI indicators surface risks early instead of after the fact.</li>
+                <li>Unified platform for CCR, WBL, alumni, and wellness.</li>
+              </ul>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Recommended Content (5)</div>
+              <div class="rec-grid">
+                <div class="rec-card">
+                  <div class="rec-header">
+                    <span class="rec-type">Customer Story</span>
+                    <span class="rec-state">MO</span>
+                  </div>
+                  <div class="rec-title">Evaluating College and Career Readiness: Improvements in the shift from Naviance to SchooLinks</div>
+                  <div class="rec-reason">Highlights measurable improvements in student experience after switching.</div>
+                  <div class="rec-actions">
+                    <button class="rec-btn primary">View Live</button>
+                    <button class="rec-btn">Download</button>
+                  </div>
+                </div>
+
+                <div class="rec-card">
+                  <div class="rec-header">
+                    <span class="rec-type">Customer Story</span>
+                    <span class="rec-state">NH</span>
+                  </div>
+                  <div class="rec-title">How Bow High School Transitioned from Naviance to SchooLinks</div>
+                  <div class="rec-reason">Detailed case study of transition process and outcomes.</div>
+                  <div class="rec-actions">
+                    <button class="rec-btn primary">View Live</button>
+                    <button class="rec-btn">Download</button>
+                  </div>
+                </div>
+
+                <div class="rec-card">
+                  <div class="rec-header">
+                    <span class="rec-type">Video</span>
+                    <span class="rec-state">WI</span>
+                  </div>
+                  <div class="rec-title">Ditching Naviance For Personalized and Engaging College and Career Exploration</div>
+                  <div class="rec-reason">Short video for quick stakeholder sharing.</div>
+                  <div class="rec-actions">
+                    <button class="rec-btn primary">View Live</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Next Best Questions</div>
+              <div class="followups">
+                <div class="chip">1. Show me customer stories about SchooLinks</div>
+                <div class="chip">2. What features support work-based learning?</div>
+                <div class="chip">3. Any Texas-specific comparisons?</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint">Scroll down to see 6 matching results</div>
+
+      <div class="input-row">
+        <input placeholder="Ask about marketing content..." />
+        <button aria-label="Send"></button>
+      </div>
+    </div>
+  </body>
+</html>

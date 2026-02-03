@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Sparkles, User, ExternalLink, RefreshCw, FileText, Download, Mic, MicOff, Loader2 } from 'lucide-react';
+import { Send, Sparkles, User, ExternalLink, RefreshCw, FileText, Download, Mic, MicOff, Loader2, Zap, List, HelpCircle } from 'lucide-react';
 
 // OpenAI API key is now handled server-side via /api/whisper proxy
 
@@ -162,6 +162,170 @@ function formatResponseText(text) {
 }
 
 /**
+ * StructuredResponse Component
+ * Renders AI responses in scannable sections: Quick Answer, Key Points, Content, Follow-ups
+ */
+function StructuredResponse({ message, onFollowUp, loading, results, contentDatabase }) {
+  const { quick_answer, key_points, recommendations, follow_up_questions } = message;
+
+  // Fuzzy title matching for recommendations (same logic as before)
+  const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
+
+  const getKeyWords = (str) => {
+    const words = normalizeForMatch(str).split(' ').filter(w => w.length > 3);
+    return words.slice(0, 6);
+  };
+
+  const findContentItem = (rec) => {
+    const recTitleNorm = normalizeForMatch(rec.title);
+    const recKeyWords = getKeyWords(rec.title);
+
+    const findByFuzzyTitle = (items) => (items || []).find(r => {
+      const itemTitleNorm = normalizeForMatch(r.title);
+      if (itemTitleNorm === recTitleNorm) return true;
+      const minLen = Math.min(itemTitleNorm.length, recTitleNorm.length);
+      if (minLen > 15 && (itemTitleNorm.includes(recTitleNorm) || recTitleNorm.includes(itemTitleNorm))) {
+        return true;
+      }
+      const itemKeyWords = getKeyWords(r.title);
+      const matchCount = recKeyWords.filter(w => itemKeyWords.includes(w)).length;
+      const matchRatio = matchCount / Math.max(recKeyWords.length, 1);
+      return matchCount >= 4 && matchRatio >= 0.6;
+    });
+
+    return findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
+  };
+
+  return (
+    <div className="chat-structured-response">
+      {/* Quick Answer Section */}
+      {quick_answer && (
+        <div className="chat-section">
+          <div className="chat-section-title">
+            <Zap size={14} />
+            Quick Answer
+          </div>
+          <div className="chat-quick-answer">{quick_answer}</div>
+        </div>
+      )}
+
+      {/* Key Points Section */}
+      {key_points?.length > 0 && (
+        <div className="chat-section">
+          <div className="chat-section-title">
+            <List size={14} />
+            Key Points
+          </div>
+          <ul className="chat-key-points">
+            {key_points.map((point, idx) => (
+              <li key={idx}>{point}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Recommended Content Section */}
+      {recommendations?.length > 0 && (
+        <div className="chat-section">
+          <div className="chat-section-title">
+            <FileText size={14} />
+            Recommended Content ({recommendations.length})
+          </div>
+          <div className="chat-rec-grid">
+            {recommendations.map((rec, idx) => {
+              const item = findContentItem(rec);
+              const title = item?.title || rec.title;
+              const type = item?.type || rec.type || 'Content';
+              const state = item?.state;
+              const liveLink = item?.live_link;
+              const ungatedLink = item?.ungated_link;
+
+              return (
+                <div key={idx} className="chat-rec-card">
+                  <div className="chat-rec-card-header">
+                    <span className="chat-rec-type">{type}</span>
+                    {state && <span className="chat-rec-state">{state}</span>}
+                  </div>
+                  <div className="chat-rec-card-title">{title}</div>
+                  {(item?.summary || rec.reason) && (
+                    <div className="chat-rec-card-reason">
+                      {item?.summary
+                        ? (item.summary.length > 150 ? item.summary.substring(0, 150) + '...' : item.summary)
+                        : rec.reason}
+                    </div>
+                  )}
+                  <div className="chat-rec-card-actions">
+                    {liveLink && (
+                      <a
+                        href={liveLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="chat-rec-action-btn primary"
+                        onClick={() => {
+                          if (window.heap) window.heap.track('Chat Recommendation Clicked', {
+                            content_type: type,
+                            content_title: title,
+                            link_type: 'live'
+                          });
+                        }}
+                      >
+                        View Live <ExternalLink size={12} />
+                      </a>
+                    )}
+                    {ungatedLink && (
+                      <a
+                        href={ungatedLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="chat-rec-action-btn"
+                        onClick={() => {
+                          if (window.heap) window.heap.track('Chat Recommendation Clicked', {
+                            content_type: type,
+                            content_title: title,
+                            link_type: 'download'
+                          });
+                        }}
+                      >
+                        <Download size={12} /> Download
+                      </a>
+                    )}
+                    {!liveLink && !ungatedLink && (
+                      <span className="chat-rec-no-link">See results below</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Follow-up Questions Section */}
+      {follow_up_questions?.length > 0 && (
+        <div className="chat-section">
+          <div className="chat-section-title">
+            <HelpCircle size={14} />
+            Next Best Questions
+          </div>
+          <div className="chat-followups">
+            {follow_up_questions.map((q, idx) => (
+              <button
+                key={idx}
+                className="chat-followup-chip"
+                onClick={() => onFollowUp(q)}
+                disabled={loading}
+              >
+                {idx + 1}. {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * ChatInterface Component
  * Provides a conversational interface for the AI Search Assistant
  * Supports multi-turn dialog with conversation history
@@ -300,143 +464,113 @@ function ChatInterface({
             <div className="chat-message-content">
               {message.role === 'user' ? (
                 <p>{message.content}</p>
+              ) : message.quick_answer ? (
+                /* New structured format with sections */
+                <StructuredResponse
+                  message={message}
+                  onFollowUp={handleSuggestionClick}
+                  loading={loading}
+                  results={results}
+                  contentDatabase={contentDatabase}
+                />
               ) : (
-                <div className="chat-response-text">
-                  {formatResponseText(message.content)}
-                </div>
-              )}
-
-              {/* Render recommendations for assistant messages */}
-              {message.role === 'assistant' && message.recommendations?.length > 0 && (
-                <div className="chat-recommendations">
-                  <span className="chat-rec-header">
-                    <FileText size={14} />
-                    Recommended Content ({message.recommendations.length})
-                  </span>
-                  <div className="chat-rec-grid">
-                    {message.recommendations.map((rec, idx) => {
-                      // Find item by title - check both results and full database
-                      // Use aggressive fuzzy matching to handle title variations from AI
-                      const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
-                      const recTitleNorm = normalizeForMatch(rec.title);
-
-                      // Extract key words for matching (first 5-6 significant words)
-                      const getKeyWords = (str) => {
-                        const words = normalizeForMatch(str).split(' ').filter(w => w.length > 3);
-                        return words.slice(0, 6);
-                      };
-                      const recKeyWords = getKeyWords(rec.title);
-
-                      const findByFuzzyTitle = (items) => (items || []).find(r => {
-                        const itemTitleNorm = normalizeForMatch(r.title);
-
-                        // 1. Exact match
-                        if (itemTitleNorm === recTitleNorm) return true;
-
-                        // 2. Substantial substring match (min 15 chars to avoid short false positives)
-                        const minLen = Math.min(itemTitleNorm.length, recTitleNorm.length);
-                        if (minLen > 15 && (itemTitleNorm.includes(recTitleNorm) || recTitleNorm.includes(itemTitleNorm))) {
-                          return true;
-                        }
-
-                        // 3. Stricter keyword match (4+ words AND 60%+ match ratio)
-                        // This prevents cross-matching similar titles like "Liberty Hill" vs "Pflugerville"
-                        const itemKeyWords = getKeyWords(r.title);
-                        const matchCount = recKeyWords.filter(w => itemKeyWords.includes(w)).length;
-                        const matchRatio = matchCount / Math.max(recKeyWords.length, 1);
-                        return matchCount >= 4 && matchRatio >= 0.6;
-                      });
-
-                      const item = findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
-
-                      // Debug: log if no match found
-                      if (!item && rec.title) {
-                        console.log('[ChatInterface] No match found for recommendation:', rec.title);
-                        console.log('[ChatInterface] Available results:', (results || []).slice(0, 5).map(r => r.title));
-                      }
-
-                      // Always render card - use rec data as fallback if item not found
-                      const title = item?.title || rec.title;
-                      const type = item?.type || rec.type || 'Content';
-                      const state = item?.state;
-                      const liveLink = item?.live_link;
-                      const ungatedLink = item?.ungated_link;
-
-                      return (
-                        <div key={idx} className="chat-rec-card">
-                          <div className="chat-rec-card-header">
-                            <span className="chat-rec-type">{type}</span>
-                            {state && <span className="chat-rec-state">{state}</span>}
-                          </div>
-                          <div className="chat-rec-card-title">{title}</div>
-                          {(item?.summary || rec.reason) && (
-                            <div className="chat-rec-card-reason">
-                              {item?.summary
-                                ? (item.summary.length > 150 ? item.summary.substring(0, 150) + '...' : item.summary)
-                                : rec.reason}
-                            </div>
-                          )}
-                          <div className="chat-rec-card-actions">
-                            {liveLink && (
-                              <a
-                                href={liveLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="chat-rec-action-btn primary"
-                                onClick={() => {
-                                  if (window.heap) window.heap.track('Chat Recommendation Clicked', {
-                                    content_type: type,
-                                    content_title: title,
-                                    link_type: 'live'
-                                  });
-                                }}
-                              >
-                                View Live <ExternalLink size={12} />
-                              </a>
-                            )}
-                            {ungatedLink && (
-                              <a
-                                href={ungatedLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="chat-rec-action-btn"
-                                onClick={() => {
-                                  if (window.heap) window.heap.track('Chat Recommendation Clicked', {
-                                    content_type: type,
-                                    content_title: title,
-                                    link_type: 'download'
-                                  });
-                                }}
-                              >
-                                <Download size={12} /> Download
-                              </a>
-                            )}
-                            {!liveLink && !ungatedLink && (
-                              <span className="chat-rec-no-link">See results below</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                /* Legacy format fallback */
+                <>
+                  <div className="chat-response-text">
+                    {formatResponseText(message.content)}
                   </div>
-                </div>
-              )}
 
-              {/* Follow-up suggestions */}
-              {message.role === 'assistant' && message.followUpQuestions?.length > 0 && (
-                <div className="chat-follow-ups">
-                  <span className="chat-follow-up-label">You might also ask:</span>
-                  {message.followUpQuestions.slice(0, 2).map((q, idx) => (
-                    <button
-                      key={idx}
-                      className="chat-follow-up-btn"
-                      onClick={() => handleSuggestionClick(q)}
-                      disabled={loading}
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
+                  {/* Legacy recommendations rendering */}
+                  {message.recommendations?.length > 0 && (
+                    <div className="chat-section">
+                      <div className="chat-section-title">
+                        <FileText size={14} />
+                        Recommended Content ({message.recommendations.length})
+                      </div>
+                      <div className="chat-rec-grid">
+                        {message.recommendations.map((rec, idx) => {
+                          const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
+                          const recTitleNorm = normalizeForMatch(rec.title);
+                          const getKeyWords = (str) => {
+                            const words = normalizeForMatch(str).split(' ').filter(w => w.length > 3);
+                            return words.slice(0, 6);
+                          };
+                          const recKeyWords = getKeyWords(rec.title);
+                          const findByFuzzyTitle = (items) => (items || []).find(r => {
+                            const itemTitleNorm = normalizeForMatch(r.title);
+                            if (itemTitleNorm === recTitleNorm) return true;
+                            const minLen = Math.min(itemTitleNorm.length, recTitleNorm.length);
+                            if (minLen > 15 && (itemTitleNorm.includes(recTitleNorm) || recTitleNorm.includes(itemTitleNorm))) return true;
+                            const itemKeyWords = getKeyWords(r.title);
+                            const matchCount = recKeyWords.filter(w => itemKeyWords.includes(w)).length;
+                            const matchRatio = matchCount / Math.max(recKeyWords.length, 1);
+                            return matchCount >= 4 && matchRatio >= 0.6;
+                          });
+                          const item = findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
+                          const title = item?.title || rec.title;
+                          const type = item?.type || rec.type || 'Content';
+                          const state = item?.state;
+                          const liveLink = item?.live_link;
+                          const ungatedLink = item?.ungated_link;
+
+                          return (
+                            <div key={idx} className="chat-rec-card">
+                              <div className="chat-rec-card-header">
+                                <span className="chat-rec-type">{type}</span>
+                                {state && <span className="chat-rec-state">{state}</span>}
+                              </div>
+                              <div className="chat-rec-card-title">{title}</div>
+                              {(item?.summary || rec.reason) && (
+                                <div className="chat-rec-card-reason">
+                                  {item?.summary
+                                    ? (item.summary.length > 150 ? item.summary.substring(0, 150) + '...' : item.summary)
+                                    : rec.reason}
+                                </div>
+                              )}
+                              <div className="chat-rec-card-actions">
+                                {liveLink && (
+                                  <a href={liveLink} target="_blank" rel="noopener noreferrer" className="chat-rec-action-btn primary">
+                                    View Live <ExternalLink size={12} />
+                                  </a>
+                                )}
+                                {ungatedLink && (
+                                  <a href={ungatedLink} target="_blank" rel="noopener noreferrer" className="chat-rec-action-btn">
+                                    <Download size={12} /> Download
+                                  </a>
+                                )}
+                                {!liveLink && !ungatedLink && (
+                                  <span className="chat-rec-no-link">See results below</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Legacy follow-up suggestions */}
+                  {message.followUpQuestions?.length > 0 && (
+                    <div className="chat-section">
+                      <div className="chat-section-title">
+                        <HelpCircle size={14} />
+                        Next Best Questions
+                      </div>
+                      <div className="chat-followups">
+                        {message.followUpQuestions.slice(0, 3).map((q, idx) => (
+                          <button
+                            key={idx}
+                            className="chat-followup-chip"
+                            onClick={() => handleSuggestionClick(q)}
+                            disabled={loading}
+                          >
+                            {idx + 1}. {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

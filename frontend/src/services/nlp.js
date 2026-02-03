@@ -182,20 +182,21 @@ function detectQueryComplexity(query) {
 }
 
 /**
- * Log complex prompts to database for analysis and agent improvement
- * Only logs prompts that use STANDARD or ADVANCED models
+ * Log complete AI interaction to Supabase for QA and fine-tuning
+ * Captures query + AI response for review and improvement
  * @param {string} query - The user's query
  * @param {string} complexity - 'simple' | 'standard' | 'advanced'
  * @param {string} model - The model used
- * @param {object} metadata - Additional context (detectedStates, queryType, etc.)
+ * @param {object} metadata - Additional context (detectedStates, queryType, sessionId)
+ * @param {object} response - The AI response (optional)
+ * @param {number} responseTimeMs - Time taken for AI response (optional)
  */
-async function logPromptForAnalysis(query, complexity, model, metadata = {}) {
+async function logPromptForAnalysis(query, complexity, model, metadata = {}, response = null, responseTimeMs = null) {
   // Only log standard and advanced queries (skip simple ones to reduce noise)
   if (complexity === 'simple') return;
 
   try {
-    // Import supabase dynamically to avoid circular dependencies
-    const { supabase } = await import('./supabase');
+    const { supabaseClient } = await import('./supabase');
 
     const logEntry = {
       query: query,
@@ -204,23 +205,32 @@ async function logPromptForAnalysis(query, complexity, model, metadata = {}) {
       detected_states: metadata.detectedStates || [],
       query_type: metadata.queryType || 'search',
       timestamp: new Date().toISOString(),
-      // Store matched indicators for analysis
       matched_indicators: metadata.matchedIndicators || [],
+      session_id: metadata.sessionId || null,
     };
 
-    // Insert into ai_prompt_logs table (will create if not exists via RLS)
-    const { error } = await supabase
+    // Add response data for QA review (if available)
+    if (response) {
+      logEntry.ai_quick_answer = response.quick_answer || null;
+      logEntry.ai_key_points = response.key_points || [];
+      logEntry.ai_response_raw = JSON.stringify(response).substring(0, 5000);
+      logEntry.recommendations_count = response.recommendations?.length || 0;
+    }
+
+    if (responseTimeMs) {
+      logEntry.response_time_ms = responseTimeMs;
+    }
+
+    const { error } = await supabaseClient
       .from('ai_prompt_logs')
       .insert([logEntry]);
 
     if (error) {
-      // Log error but don't fail the main flow
-      console.warn('[Prompt Logging] Failed to log prompt:', error.message);
+      console.warn('[Prompt Logging] Failed:', error.message);
     } else {
-      console.log(`[Prompt Logging] Logged ${complexity} query for analysis`);
+      console.log(`[Prompt Logging] Logged ${complexity} query${response ? ' with response' : ''} for QA`);
     }
   } catch (err) {
-    // Silent fail - logging shouldn't break the main functionality
     console.warn('[Prompt Logging] Error:', err.message);
   }
 }
@@ -1219,12 +1229,15 @@ ${stateContext ? `### Detailed Context:\n${stateContext}` : ''}
   const selectedModel = getModelForQuery('chat', userMessage);
   console.log(`[Chat] Using model: ${selectedModel} for query: "${userMessage.substring(0, 50)}..."`);
 
-  // Log complex prompts for analysis (async, non-blocking)
-  logPromptForAnalysis(userMessage, queryComplexity, selectedModel, {
+  // Track response time for QA logging
+  const startTime = Date.now();
+
+  // Store metadata for logging (will log with response after AI call)
+  const logMetadata = {
     detectedStates,
     queryType: queryType.questionType,
-  });
-
+    sessionId: `session-${Date.now()}`, // Simple session ID
+  };
 
   // Build conversation messages for OpenAI
   const messages = [
@@ -1240,22 +1253,37 @@ ${contentSummary}
 
 YOUR RESPONSE FORMAT (MUST BE VALID JSON):
 {
-  "response": "Your conversational response. Be helpful, specific, and demonstrate SchooLinks knowledge. Reference exact content titles when recommending.",
-  "recommendations": [
-    { "title": "EXACT title from available content", "reason": "Brief explanation" }
+  "quick_answer": "A concise 1-2 sentence summary directly answering the user's query. Get to the point immediately.",
+  "key_points": [
+    "First important takeaway or SchooLinks advantage",
+    "Second key point with specific detail",
+    "Third relevant insight (include 3-5 points total)"
   ],
-  "followUpQuestions": ["Actionable search prompt 1", "Actionable search prompt 2"]
+  "recommendations": [
+    { "title": "EXACT title from available content", "type": "Content Type", "reason": "Brief explanation" }
+  ],
+  "follow_up_questions": ["Actionable search prompt 1", "Actionable search prompt 2", "Actionable search prompt 3"]
 }
 
 CRITICAL REQUIREMENTS - READ CAREFULLY:
-1. You MUST respond with valid JSON
-2. The "recommendations" array MUST NEVER BE EMPTY if content is available above
-3. ALWAYS include at least 3-5 recommendations from the available content list
-4. Every response needs recommendations - even when answering questions
+1. You MUST respond with valid JSON containing ALL required fields
+2. "quick_answer" - REQUIRED: A punchy 1-2 sentence summary. No fluff, get straight to the answer.
+3. "key_points" - REQUIRED: 3-5 bullet points highlighting the most important insights. Be specific and actionable.
+4. "recommendations" - REQUIRED: NEVER empty if content is available. Include 3-8 relevant items.
+5. "follow_up_questions" - REQUIRED: 3 actionable search prompts the user might want to explore next.
 
 **DUAL MODE OPERATION:**
-1. QUESTION MODE: When the user asks a question (what, how, why, etc.), FIRST answer the question thoroughly using your SchooLinks knowledge, THEN ALWAYS recommend supporting content from the list above.
-2. SEARCH MODE: When the user wants to find content, focus on recommendations with brief context.
+1. QUESTION MODE: When the user asks a question (what, how, why, etc.):
+   - quick_answer: Direct answer to their question
+   - key_points: Key facts, features, or differentiators
+   - recommendations: Supporting content that elaborates
+   - follow_up_questions: Related topics to explore
+
+2. SEARCH MODE: When the user wants to find content:
+   - quick_answer: What you found and how many results
+   - key_points: Why these recommendations are relevant
+   - recommendations: ALL matching content (aim for 8-12)
+   - follow_up_questions: Ways to refine or expand the search
 
 **RECOMMENDATION RULES (MANDATORY - NEVER SKIP):**
 - EVERY RESPONSE MUST include recommendations from the available content above
@@ -1412,32 +1440,58 @@ IMPORTANT RULES:
       // Clean up multiple newlines left behind
       cleanResponse = cleanResponse.replace(/\n{3,}/g, '\n\n').trim();
 
-      return {
-        response: cleanResponse,
+      // Normalize AI response keys (AI sometimes returns quickanswer instead of quick_answer)
+      const quickAnswer = parsed.quick_answer || parsed.quickanswer || parsed.quickAnswer || null;
+      const keyPoints = parsed.key_points || parsed.keypoints || parsed.keyPoints || [];
+      const followUps = parsed.follow_up_questions || parsed.followup_questions || parsed.followupquestions || parsed.followUpQuestions || [];
+
+      const result = {
+        // New structured format fields
+        quick_answer: quickAnswer,
+        key_points: keyPoints,
         recommendations: recommendations,
-        followUpQuestions: parsed.followUpQuestions || [],
+        follow_up_questions: followUps,
+        // Legacy fields for backward compatibility
+        response: cleanResponse,
+        followUpQuestions: followUps,
         aiContent: content // Store raw for context continuity
       };
+
+      // Log complete interaction for QA (async, non-blocking)
+      const responseTime = Date.now() - startTime;
+      logPromptForAnalysis(userMessage, queryComplexity, selectedModel, logMetadata, result, responseTime);
+
+      return result;
     }
 
     // Fallback if JSON parsing fails - use raw response
     // Try to add content as recommendations anyway
     const fallbackRecs = availableContent.slice(0, 5).map(item => ({
       title: item.title,
+      type: item.type,
       reason: `Relevant ${item.type}`
     }));
 
     return {
+      // Fallback: no structured data available
+      quick_answer: null,
+      key_points: [],
       response: content,
       recommendations: fallbackRecs,
+      follow_up_questions: [],
+      followUpQuestions: [],
       aiContent: content
     };
 
   } catch (error) {
     console.error('Conversational query error:', error);
     return {
+      quick_answer: null,
+      key_points: [],
       response: "I encountered an error processing your request. Please try again or use the search bar.",
-      recommendations: []
+      recommendations: [],
+      follow_up_questions: [],
+      followUpQuestions: []
     };
   }
 }

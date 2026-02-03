@@ -25,6 +25,35 @@ This system allows marketing reps to query your content database using natural l
    - OpenAI API Key: https://platform.openai.com
    - Anthropic Claude API Key: https://console.anthropic.com
 
+## 🗄️ Database Connection
+
+The project uses Supabase PostgreSQL with connection pooling.
+
+### Connection Details
+- **Host**: `aws-1-us-east-1.pooler.supabase.com`
+- **Port**: `5432`
+- **Database**: `postgres`
+- **Project Ref**: `wbjkncpkucmtjusfczdy`
+
+### Connection String Format
+```
+postgresql://postgres.wbjkncpkucmtjusfczdy:[PASSWORD]@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+```
+
+### Running Migrations
+```bash
+# Set DATABASE_URL (already configured in .env.local)
+source .env.local
+
+# Run migration script
+python scripts/run_qa_logging_migration.py
+```
+
+### Tables
+- `marketing_content` - Main content database
+- `state_context` - State-specific context for AI (HB 773, MO BOE, etc.)
+- `ai_prompt_logs` - Query logging for QA and fine-tuning
+
 ## 🚀 Quick Start
 
 ### Step 1: Set Up Supabase Database

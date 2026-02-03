@@ -706,12 +706,18 @@ function App() {
 
       // Add assistant response to history with ALL recommendations
       // ChatInterface will handle finding matching items for links
+      // Include new structured format fields for the upgraded UI
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: response.response,
+        // New structured format fields
+        quick_answer: response.quick_answer,
+        key_points: response.key_points || [],
+        follow_up_questions: response.follow_up_questions || [],
+        // Legacy fields
         recommendations: response.recommendations || [],
-        followUpQuestions: response.followUpQuestions,
+        followUpQuestions: response.followUpQuestions || response.follow_up_questions || [],
         aiContent: response.aiContent,
         timestamp: Date.now()
       };
