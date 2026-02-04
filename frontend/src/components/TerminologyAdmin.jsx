@@ -30,6 +30,7 @@ function TerminologyAdmin() {
   const [generationProgress, setGenerationProgress] = useState('');
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [lastAnalysis, setLastAnalysis] = useState(null); // Store last analysis for display
   const [searchFilter, setSearchFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
 
@@ -189,10 +190,10 @@ function TerminologyAdmin() {
 
       const { data: logs, error: logsError } = await supabaseClient
         .from('ai_prompt_logs')
-        .select('query, recommendations_count, response')
+        .select('query, complexity, query_type, detected_states, recommendations_count, created_at')
         .gte('created_at', sevenDaysAgo.toISOString())
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(150);
 
       if (logsError) {
         throw new Error(`Failed to fetch logs: ${logsError.message}`);
@@ -214,19 +215,55 @@ function TerminologyAdmin() {
       });
       allMappings.forEach(m => existingTerms.add(m.user_term.toLowerCase()));
 
-      // Step 3: Prepare log summary for AI
+      // Step 3: Prepare comprehensive log summary for AI
       const logSummary = logs.map(log => ({
         query: log.query,
-        results: log.recommendations_count || 0
+        results: log.recommendations_count || 0,
+        complexity: log.complexity || 'standard',
+        type: log.query_type || 'search',
+        states: log.detected_states || []
       }));
 
-      // Focus on queries with poor results
-      const poorResults = logSummary.filter(l => l.results < 3);
-      const goodResults = logSummary.filter(l => l.results >= 3).slice(0, 20);
+      console.log('[TerminologyAdmin] Loaded logs:', logSummary.length, 'Sample:', logSummary.slice(0, 3));
 
-      setGenerationProgress('Identifying terminology gaps with AI...');
+      // Get unique queries (deduplicate similar searches)
+      const uniqueQueries = [...new Set(logSummary.map(l => l.query?.toLowerCase().trim()).filter(Boolean))];
 
-      // Step 4: Call OpenAI to analyze and suggest mappings
+      // All queries for comprehensive analysis with metadata
+      const allQueriesForAnalysis = uniqueQueries.slice(0, 100).map(q => {
+        const match = logSummary.find(l => l.query?.toLowerCase().trim() === q);
+        return {
+          query: q,
+          results: match?.results || 0,
+          complexity: match?.complexity || 'standard',
+          type: match?.type || 'search'
+        };
+      });
+
+      setGenerationProgress('Analyzing query patterns and terminology gaps...');
+
+      // Step 4: Also fetch our content types and tags to identify gaps
+      let contentTypes = [];
+      let existingTags = [];
+      try {
+        const { data: content } = await supabaseClient
+          .from('marketing_content')
+          .select('type, tags, auto_tags')
+          .limit(500);
+
+        if (content) {
+          contentTypes = [...new Set(content.map(c => c.type).filter(Boolean))];
+          const allTags = content.flatMap(c => [
+            ...(c.tags?.split(',').map(t => t.trim().toLowerCase()) || []),
+            ...(c.auto_tags?.split(',').map(t => t.trim().toLowerCase()) || [])
+          ]).filter(Boolean);
+          existingTags = [...new Set(allTags)].slice(0, 100);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch content metadata:', err);
+      }
+
+      // Step 5: Call OpenAI to analyze and suggest mappings
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -239,42 +276,64 @@ function TerminologyAdmin() {
           messages: [
             {
               role: 'system',
-              content: `You are a search quality analyst for a marketing content portal.
-The portal contains: Blogs, Videos, Video Clips, Customer Stories, 1-Pagers, Ebooks, Webinars, Press Releases.
+              content: `You are a search quality analyst for SchooLinks Marketing Content Portal.
+The portal contains marketing content about K-12 education technology for college and career readiness.
+
+CONTENT TYPES IN DATABASE:
+${contentTypes.join(', ')}
+
+SAMPLE TAGS/TOPICS WE HAVE CONTENT FOR:
+${existingTags.slice(0, 50).join(', ')}
 
 EXISTING TERMINOLOGY MAPPINGS (already handled):
 ${JSON.stringify(existingMappings, null, 2)}
 
-TASK: Analyze search queries and suggest NEW terminology mappings that would improve search results.
-Focus on:
-1. Misspellings of content types (e.g., "case study" should map to "Customer Story")
-2. Alternative phrases users might use (e.g., "whitepaper" → "Ebook")
-3. Competitor name misspellings (naviance, xello, powerschool, majorclarity)
-4. Abbreviations (e.g., "wbl" → "work-based learning")
-5. Persona variations (e.g., "guidance counselor" → "counselors")
+TASK: Analyze ALL search queries and identify terminology gaps. Look for:
 
-IMPORTANT: Only suggest mappings that are NOT already in the existing mappings above.
-Only suggest high-confidence mappings where the intent is clear.
+1. **Content Type Synonyms**: Users may say "case study" but we call it "Customer Story", "whitepaper" but we call it "Ebook", "fact sheet" but we call it "1-Pager"
 
-Return ONLY valid JSON in this format:
+2. **Misspellings**: Common typos of content types, competitor names, or education terms
+
+3. **Competitor Variations**: naviance/navience, xello/zelo, powerschool/power school, majorclarity
+
+4. **Education Acronyms**: CCR, WBL, FAFSA, SEL, CTE, ICAP, PLP, ILP, etc.
+
+5. **Persona Terms**: counselor/guidance counselor/school counselor → "counselors", admin/principal/superintendent → "administrators"
+
+6. **Topic Synonyms**: Terms users search for that map to topics we have content about
+
+7. **State-Specific Terms**: State education acronyms (ICAP=Colorado, ECAP=Arizona, etc.)
+
+IMPORTANT:
+- Only suggest mappings NOT already in existing mappings
+- Focus on terms that appear in multiple queries
+- Include confidence score based on how clear the mapping is
+- The "canonical_term" should match actual content types, tags, or standard terms we use
+
+Return ONLY valid JSON:
 {
   "suggestions": [
-    {"user_term": "term users typed", "canonical_term": "correct database term", "map_type": "content_type|competitor|persona|topic|feature", "confidence": 0.8, "reason": "brief explanation"}
+    {"user_term": "what users typed", "canonical_term": "correct term", "map_type": "content_type|competitor|persona|topic|feature|state", "confidence": 0.8, "reason": "why this mapping makes sense"}
   ],
-  "analysis_summary": "Brief summary of patterns observed"
+  "content_gaps": ["topics users searched for that we may not have content about"],
+  "analysis_summary": "Key patterns and observations"
 }`
             },
             {
               role: 'user',
-              content: `Analyze these search queries:
+              content: `Analyze these ${allQueriesForAnalysis.length} search queries from our portal:
 
-QUERIES WITH POOR RESULTS (< 3 matches):
-${JSON.stringify(poorResults, null, 2)}
+ALL SEARCH QUERIES (with result counts):
+${JSON.stringify(allQueriesForAnalysis, null, 2)}
 
-QUERIES WITH GOOD RESULTS (for reference):
-${JSON.stringify(goodResults, null, 2)}
+Look for:
+1. Terms that should map to our content types
+2. Misspellings or variations of competitor names
+3. Education acronyms that need expansion
+4. Persona terms that could be standardized
+5. Topics users search for that we should tag content with
 
-Suggest terminology mappings that would help the poor-performing queries find better results.`
+Suggest terminology mappings that would improve search quality.`
             }
           ]
         })
@@ -291,6 +350,7 @@ Suggest terminology mappings that would help the poor-performing queries find be
       // Parse AI response
       let suggestions = [];
       let summary = '';
+      let contentGaps = [];
       try {
         // Extract JSON from response (handle markdown code blocks)
         const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -298,25 +358,40 @@ Suggest terminology mappings that would help the poor-performing queries find be
           const parsed = JSON.parse(jsonMatch[0]);
           suggestions = parsed.suggestions || [];
           summary = parsed.analysis_summary || '';
+          contentGaps = parsed.content_gaps || [];
         }
       } catch (parseErr) {
         console.error('Failed to parse AI response:', parseErr, content);
         throw new Error('AI returned invalid response format');
       }
 
-      if (suggestions.length === 0) {
-        setSuccess(`Analysis complete. ${summary || 'No new terminology gaps identified.'}`);
-        setGenerating(false);
-        return;
+      // Store analysis for display
+      const analysisResult = {
+        timestamp: new Date().toISOString(),
+        queriesAnalyzed: allQueriesForAnalysis,
+        aiSuggestions: suggestions,
+        contentGaps: contentGaps,
+        summary: summary,
+        skippedSuggestions: []
+      };
+
+      // Log content gaps for visibility
+      if (contentGaps.length > 0) {
+        console.log('[TerminologyAdmin] Content gaps identified:', contentGaps);
       }
+      console.log('[TerminologyAdmin] AI suggestions:', suggestions);
 
-      setGenerationProgress(`Found ${suggestions.length} suggestions. Saving...`);
+      setGenerationProgress(`Found ${suggestions.length} suggestions. Processing...`);
 
-      // Step 5: Insert suggestions into database
+      // Step 6: Insert suggestions into database (filter duplicates)
       let insertedCount = 0;
       for (const suggestion of suggestions) {
         // Skip if term already exists
         if (existingTerms.has(suggestion.user_term.toLowerCase())) {
+          analysisResult.skippedSuggestions.push({
+            ...suggestion,
+            reason: 'Already exists in mappings'
+          });
           continue;
         }
 
@@ -336,16 +411,34 @@ Suggest terminology mappings that would help the poor-performing queries find be
           if (!insertError) {
             insertedCount++;
             existingTerms.add(suggestion.user_term.toLowerCase());
+          } else {
+            analysisResult.skippedSuggestions.push({
+              ...suggestion,
+              reason: `DB error: ${insertError.message}`
+            });
           }
         } catch (err) {
           console.warn('Failed to insert suggestion:', suggestion, err);
+          analysisResult.skippedSuggestions.push({
+            ...suggestion,
+            reason: err.message
+          });
         }
       }
+
+      analysisResult.insertedCount = insertedCount;
+      setLastAnalysis(analysisResult);
 
       // Reload data to show new suggestions
       await loadData();
 
-      setSuccess(`Generated ${insertedCount} new suggestions for review! ${summary}`);
+      const statusMsg = insertedCount > 0
+        ? `Generated ${insertedCount} new suggestions for review!`
+        : suggestions.length > 0
+          ? `All ${suggestions.length} AI suggestions already exist in mappings.`
+          : 'No new terminology gaps found.';
+
+      setSuccess(`${statusMsg} ${summary}`);
     } catch (err) {
       console.error('Failed to generate suggestions:', err);
       setError(err.message || 'Failed to generate suggestions');
@@ -493,12 +586,90 @@ Suggest terminology mappings that would help the poor-performing queries find be
               </p>
             </div>
 
+            {/* Last Analysis Results */}
+            {lastAnalysis && (
+              <div className="analysis-results">
+                <h4>Last Analysis Results</h4>
+                <div className="analysis-summary">
+                  <p><strong>Summary:</strong> {lastAnalysis.summary}</p>
+                  <p><strong>Queries Analyzed:</strong> {lastAnalysis.queriesAnalyzed?.length || 0}</p>
+                  <p><strong>AI Suggestions:</strong> {lastAnalysis.aiSuggestions?.length || 0}
+                    {lastAnalysis.skippedSuggestions?.length > 0 &&
+                      ` (${lastAnalysis.skippedSuggestions.length} already exist)`}
+                  </p>
+                  <p><strong>New Mappings Created:</strong> {lastAnalysis.insertedCount || 0}</p>
+                </div>
+
+                {lastAnalysis.contentGaps?.length > 0 && (
+                  <div className="content-gaps">
+                    <h5>Content Gaps Identified</h5>
+                    <ul>
+                      {lastAnalysis.contentGaps.map((gap, i) => (
+                        <li key={i}>{gap}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {lastAnalysis.aiSuggestions?.length > 0 && (
+                  <div className="ai-suggestions-preview">
+                    <h5>AI Suggested Mappings</h5>
+                    <table className="mini-table">
+                      <thead>
+                        <tr>
+                          <th>User Term</th>
+                          <th>→</th>
+                          <th>Canonical Term</th>
+                          <th>Type</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lastAnalysis.aiSuggestions.map((s, i) => {
+                          const skipped = lastAnalysis.skippedSuggestions?.find(
+                            sk => sk.user_term === s.user_term
+                          );
+                          return (
+                            <tr key={i} className={skipped ? 'skipped' : 'new'}>
+                              <td>"{s.user_term}"</td>
+                              <td>→</td>
+                              <td>"{s.canonical_term}"</td>
+                              <td><span className={`type-badge ${s.map_type}`}>{s.map_type}</span></td>
+                              <td>{skipped ? '⚠️ Already exists' : '✅ Added'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {lastAnalysis.queriesAnalyzed?.length > 0 && (
+                  <details className="queries-analyzed">
+                    <summary>View {lastAnalysis.queriesAnalyzed.length} Queries Analyzed</summary>
+                    <ul>
+                      {lastAnalysis.queriesAnalyzed.slice(0, 20).map((q, i) => (
+                        <li key={i}>
+                          "{q.query}" <span className="query-meta">({q.results} results, {q.complexity})</span>
+                        </li>
+                      ))}
+                      {lastAnalysis.queriesAnalyzed.length > 20 && (
+                        <li className="more">...and {lastAnalysis.queriesAnalyzed.length - 20} more</li>
+                      )}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+
             {suggestions.length === 0 ? (
               <div className="empty-state">
                 <Check size={48} />
                 <h3>All Caught Up!</h3>
                 <p>No pending suggestions to review.</p>
-                <p className="hint">Click the button above to analyze recent searches and generate suggestions.</p>
+                {!lastAnalysis && (
+                  <p className="hint">Click the button above to analyze recent searches and generate suggestions.</p>
+                )}
               </div>
             ) : (
               <div className="suggestions-list">
