@@ -134,30 +134,33 @@ export async function loadTerminologyMappings() {
     return terminologyCache;
   }
 
+  // Use fallback mappings immediately if database operations fail
+  // This ensures the app works even without the terminology_map table
   try {
     // Try to call the database function first (most efficient)
     const { data: funcResult, error: funcError } = await supabaseClient
       .rpc('get_terminology_mappings');
 
-    if (!funcError && funcResult) {
+    if (!funcError && funcResult && typeof funcResult === 'object') {
       terminologyCache = funcResult;
       cacheTimestamp = now;
       const totalMappings = Object.values(funcResult).reduce(
-        (sum, typeMap) => sum + Object.keys(typeMap).length, 0
+        (sum, typeMap) => sum + (typeMap ? Object.keys(typeMap).length : 0), 0
       );
       console.log(`[Terminology] Loaded ${totalMappings} mappings from database function`);
       return terminologyCache;
     }
 
     // Fallback: direct query if function fails
-    console.log('[Terminology] Function unavailable, using direct query...');
+    console.log('[Terminology] Function unavailable, trying direct query...');
     const { data, error } = await supabaseClient
       .from('terminology_map')
       .select('map_type, user_term, canonical_term')
       .eq('is_active', true);
 
-    if (error) {
-      throw error;
+    if (error || !data) {
+      console.log('[Terminology] Direct query failed, using fallback mappings');
+      return FALLBACK_MAPPINGS;
     }
 
     // Transform to nested structure
@@ -175,7 +178,7 @@ export async function loadTerminologyMappings() {
     return terminologyCache;
 
   } catch (err) {
-    console.warn('[Terminology] Failed to load from database, using fallbacks:', err.message);
+    console.warn('[Terminology] Database error, using fallbacks:', err?.message || 'Unknown error');
     return FALLBACK_MAPPINGS;
   }
 }

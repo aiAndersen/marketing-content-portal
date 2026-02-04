@@ -45,33 +45,51 @@ function TerminologyAdmin() {
     setError(null);
 
     try {
-      // Load pending suggestions
+      // Load pending suggestions (graceful failure)
       const pendingSuggestions = await getPendingSuggestions();
-      setSuggestions(pendingSuggestions);
+      setSuggestions(pendingSuggestions || []);
 
-      // Load all active mappings with usage stats
-      const { data: mappings, error: mappingsError } = await supabaseClient
-        .from('terminology_map')
-        .select('*')
-        .eq('is_active', true)
-        .order('usage_count', { ascending: false });
+      // Load all active mappings with usage stats (graceful failure)
+      try {
+        const { data: mappings, error: mappingsError } = await supabaseClient
+          .from('terminology_map')
+          .select('*')
+          .eq('is_active', true)
+          .order('usage_count', { ascending: false });
 
-      if (mappingsError) throw mappingsError;
-      setAllMappings(mappings || []);
+        if (!mappingsError && mappings) {
+          setAllMappings(mappings);
+        } else {
+          console.warn('[TerminologyAdmin] terminology_map table not available:', mappingsError?.message);
+          setAllMappings([]);
+        }
+      } catch (e) {
+        console.warn('[TerminologyAdmin] Failed to load mappings:', e);
+        setAllMappings([]);
+      }
 
-      // Load recent analysis reports
-      const { data: reports, error: reportsError } = await supabaseClient
-        .from('log_analysis_reports')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // Load recent analysis reports (graceful failure)
+      try {
+        const { data: reports, error: reportsError } = await supabaseClient
+          .from('log_analysis_reports')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      if (reportsError) throw reportsError;
-      setAnalysisReports(reports || []);
+        if (!reportsError && reports) {
+          setAnalysisReports(reports);
+        } else {
+          console.warn('[TerminologyAdmin] log_analysis_reports table not available:', reportsError?.message);
+          setAnalysisReports([]);
+        }
+      } catch (e) {
+        console.warn('[TerminologyAdmin] Failed to load reports:', e);
+        setAnalysisReports([]);
+      }
 
     } catch (err) {
       console.error('Failed to load data:', err);
-      setError(err.message);
+      setError('Some features may be unavailable. Run database migrations to enable full functionality.');
     } finally {
       setLoading(false);
     }
