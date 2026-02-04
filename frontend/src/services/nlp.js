@@ -4,8 +4,24 @@
  * Handles misspellings, synonyms, and natural language understanding
  */
 
-// Terminology Brain integration for vocabulary mapping
-import { applyTerminologyMappings, getTerminologyPromptContext } from './terminology';
+// Terminology Brain integration - lazy loaded to prevent cascade failures
+// if terminology tables don't exist in the database
+let terminologyModule = null;
+
+async function getTerminologyModule() {
+  if (!terminologyModule) {
+    try {
+      terminologyModule = await import('./terminology');
+    } catch (err) {
+      console.warn('[NLP] Failed to load terminology module:', err.message);
+      terminologyModule = {
+        applyTerminologyMappings: async () => ({ content_type: [], competitor: [], persona: [], topic: [], feature: [] }),
+        getTerminologyPromptContext: async () => ''
+      };
+    }
+  }
+  return terminologyModule;
+}
 
 // OpenAI API key is now handled server-side via /api/openai proxy
 
@@ -672,7 +688,8 @@ export async function convertNaturalLanguageToQuery(naturalQuery, filters = {}) 
   // Apply terminology mappings to detect content types, competitors, etc.
   let terminologyDetected = { content_type: [], competitor: [], persona: [], topic: [], feature: [] };
   try {
-    terminologyDetected = await applyTerminologyMappings(correctedQuery);
+    const terminology = await getTerminologyModule();
+    terminologyDetected = await terminology.applyTerminologyMappings(correctedQuery);
     if (terminologyDetected.content_type?.length > 0) {
       console.log('[NLP] Terminology detected types:', terminologyDetected.content_type);
     }
@@ -1271,7 +1288,8 @@ ${stateContext ? `### Detailed Context:\n${stateContext}` : ''}
   // Load terminology context for vocabulary mapping
   let terminologyContext = '';
   try {
-    terminologyContext = await getTerminologyPromptContext();
+    const terminology = await getTerminologyModule();
+    terminologyContext = await terminology.getTerminologyPromptContext();
     console.log('[Chat] Loaded terminology context for AI prompt');
   } catch (err) {
     console.warn('[Chat] Failed to load terminology context:', err.message);

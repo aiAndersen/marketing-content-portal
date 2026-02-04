@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, MessageSquare, ChevronDown, Brain, ArrowLeft } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
 import ChatInterface from './components/ChatInterface';
-import TerminologyAdmin from './components/TerminologyAdmin';
+// Lazy load TerminologyAdmin to prevent cascade failures if terminology tables don't exist
+const TerminologyAdmin = lazy(() => import('./components/TerminologyAdmin'));
 import './App.css';
 
 function App() {
@@ -891,7 +892,9 @@ function App() {
           </div>
         </header>
         <main className="main" style={{ padding: '0' }}>
-          <TerminologyAdmin />
+          <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}><Loader2 className="animate-spin" /> Loading admin...</div>}>
+            <TerminologyAdmin />
+          </Suspense>
         </main>
       </div>
     );
