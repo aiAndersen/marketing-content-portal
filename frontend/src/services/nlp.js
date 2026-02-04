@@ -4,6 +4,9 @@
  * Handles misspellings, synonyms, and natural language understanding
  */
 
+// Terminology Brain integration for vocabulary mapping
+import { applyTerminologyMappings, getTerminologyPromptContext } from './terminology';
+
 // OpenAI API key is now handled server-side via /api/openai proxy
 
 /**
@@ -666,6 +669,17 @@ export async function convertNaturalLanguageToQuery(naturalQuery, filters = {}) 
   // Apply autocorrect before AI processing
   const correctedQuery = autocorrectQuery(naturalQuery);
 
+  // Apply terminology mappings to detect content types, competitors, etc.
+  let terminologyDetected = { content_type: [], competitor: [], persona: [], topic: [], feature: [] };
+  try {
+    terminologyDetected = await applyTerminologyMappings(correctedQuery);
+    if (terminologyDetected.content_type?.length > 0) {
+      console.log('[NLP] Terminology detected types:', terminologyDetected.content_type);
+    }
+  } catch (err) {
+    console.warn('[NLP] Terminology mapping failed, continuing with AI:', err.message);
+  }
+
   try {
     // Use serverless proxy to keep API key secure
     const response = await fetch('/api/openai', {
@@ -796,14 +810,23 @@ IMPORTANT: When primaryIntent is "state", do NOT include state names or generic 
         }
       }
 
-      // Merge with user-selected filters
+      // Merge with user-selected filters AND terminology-detected types
+      // Terminology takes priority for content type detection
+      const terminologyTypes = terminologyDetected.content_type || [];
+      const allTypes = [
+        ...terminologyTypes,           // Terminology-detected types first (most reliable)
+        ...(parsed.types || []),       // AI-detected types
+        ...(filters.types || [])       // User-selected filters
+      ];
+
       return {
-        types: [...new Set([...(parsed.types || []), ...(filters.types || [])])],
+        types: [...new Set(allTypes)],
         states: [...new Set([...detectedStates, ...(filters.states || [])])],
         searchTerms: parsed.searchTerms || [],
         correctedQuery: parsed.correctedQuery || correctedQuery,
         understanding: parsed.understanding || '',
-        primaryIntent: primaryIntent
+        primaryIntent: primaryIntent,
+        terminologyDetected // Include for debugging/logging
       };
     }
 
@@ -1245,6 +1268,15 @@ ${stateContext ? `### Detailed Context:\n${stateContext}` : ''}
 `;
   }
 
+  // Load terminology context for vocabulary mapping
+  let terminologyContext = '';
+  try {
+    terminologyContext = await getTerminologyPromptContext();
+    console.log('[Chat] Loaded terminology context for AI prompt');
+  } catch (err) {
+    console.warn('[Chat] Failed to load terminology context:', err.message);
+  }
+
   // Determine which AI model to use based on query complexity
   const queryComplexity = detectQueryComplexity(userMessage);
   const selectedModel = getModelForQuery('chat', userMessage);
@@ -1267,6 +1299,7 @@ ${stateContext ? `### Detailed Context:\n${stateContext}` : ''}
       content: `You are an intelligent content assistant for SchooLinks marketing team. You help users find the most relevant marketing content AND answer questions about SchooLinks products and features.
 
 ${SCHOOLINKS_CONTEXT}
+${terminologyContext ? `\n${terminologyContext}\n` : ''}
 ${stateContextSection}
 ${questionSystemPrompt}
 AVAILABLE CONTENT IN DATABASE:

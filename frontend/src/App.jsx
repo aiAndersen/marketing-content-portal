@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, MessageSquare, ChevronDown } from 'lucide-react';
+import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, MessageSquare, ChevronDown, Brain, ArrowLeft } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
 import ChatInterface from './components/ChatInterface';
+import TerminologyAdmin from './components/TerminologyAdmin';
 import './App.css';
 
 function App() {
@@ -24,8 +25,32 @@ function App() {
   const [conversationHistory, setConversationHistory] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [showResultsHint, setShowResultsHint] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const firstRenderRef = useRef(true);
   const resultsRef = useRef(null);
+
+  // Check URL hash for admin mode
+  useEffect(() => {
+    const checkAdminMode = () => {
+      setIsAdminMode(window.location.hash === '#admin');
+    };
+    checkAdminMode();
+    window.addEventListener('hashchange', checkAdminMode);
+    return () => window.removeEventListener('hashchange', checkAdminMode);
+  }, []);
+
+  // Keyboard shortcut: Ctrl+Shift+A to toggle admin mode
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        const newAdminMode = !isAdminMode;
+        window.location.hash = newAdminMode ? '#admin' : '';
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAdminMode]);
 
   const PAGE_SIZE = 100;
 
@@ -842,6 +867,35 @@ function App() {
     a.download = `marketing-content-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   };
+
+  // Render admin interface when in admin mode
+  if (isAdminMode) {
+    return (
+      <div className="app">
+        <header className="header">
+          <div className="header-content">
+            <div className="header-title">
+              <button
+                className="back-btn"
+                onClick={() => { window.location.hash = ''; }}
+                title="Back to Search"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <Brain size={32} />
+              <div>
+                <h1>Terminology Brain Admin</h1>
+                <p>Manage AI Search vocabulary mappings</p>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="main" style={{ padding: '0' }}>
+          <TerminologyAdmin />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

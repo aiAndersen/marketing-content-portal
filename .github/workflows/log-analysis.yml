@@ -1,0 +1,39 @@
+name: Daily Log Analysis
+
+# Run daily at 6 AM UTC (midnight CST)
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Run log analyzer
+        run: |
+          python scripts/log_analyzer.py --days 1 --auto-suggest-terms
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-analysis-report
+          path: /tmp/log_analysis_report.json
+          retention-days: 30
+        if: always()
