@@ -327,6 +327,14 @@ const AUTOCORRECT_DICTIONARY = {
   'caree': 'career', 'carreer': 'career',
   'contnet': 'content', 'conent': 'content',
   'comparsion': 'comparison', 'comparision': 'comparison',
+  // Content type synonyms (normalize to database terms)
+  'one pager': '1-pager', 'one-pager': '1-pager', 'onepager': '1-pager', '1 pager': '1-pager',
+  'fact sheet': '1-pager', 'factsheet': '1-pager', 'datasheet': '1-pager', 'data sheet': '1-pager',
+  'sell sheet': '1-pager', 'flyer': '1-pager', 'flier': '1-pager', 'brochure': '1-pager',
+  'case study': 'customer story', 'casestudy': 'customer story', 'success story': 'customer story',
+  'testimonial': 'customer story', 'costumer story': 'customer story',
+  'whitepaper': 'ebook', 'white paper': 'ebook', 'e-book': 'ebook', 'guide': 'ebook',
+  'webiner': 'webinar', 'webniar': 'webinar',
 };
 
 // State name to abbreviation mapping for direct detection
@@ -714,6 +722,19 @@ CONTENT TYPE DISAMBIGUATION:
 - "Video" = full-length videos, tutorials, demos, recorded webinars
 - "Video Clip" = short clips, snippets, teasers, highlights (use ONLY when user says "clip", "clips", "short video", or "snippet")
 - IMPORTANT: If query contains "clip" or "clips", use ONLY "Video Clip" type, NOT "Video"
+
+CRITICAL CONTENT TYPE TERM MAPPINGS (user terms → database types):
+- "one pager", "one-pager", "1 pager", "pager", "fact sheet", "factsheet", "datasheet", "flyer", "brochure", "sell sheet" → type: "1-Pager"
+- "case study", "success story", "testimonial" → type: "Customer Story"
+- "whitepaper", "white paper", "e-book", "guide" → type: "Ebook"
+- "tutorial", "demo" → type: "Video"
+- "clip", "clips", "snippet", "short video", "teaser" → type: "Video Clip"
+
+Examples with content type mapping:
+- "one pager about counselors" → types: ["1-Pager"], searchTerms: ["counselors"], primaryIntent: "topic"
+- "fact sheets for texas" → types: ["1-Pager"], states: ["TX"], searchTerms: [], primaryIntent: "state"
+- "case studies from california" → types: ["Customer Story"], states: ["CA"], searchTerms: [], primaryIntent: "state"
+- "whitepaper about FAFSA" → types: ["Ebook"], searchTerms: ["fafsa"], primaryIntent: "topic"
 
 Examples:
 - "Xello vs SchooLinks comparisons" → searchTerms: ["xello"], primaryIntent: "competitor" (NOT ["xello", "comparison", "schoolinks"])
