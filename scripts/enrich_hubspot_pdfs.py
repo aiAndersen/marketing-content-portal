@@ -219,7 +219,7 @@ def main():
         SELECT id, title, type, ungated_link
         FROM marketing_content
         WHERE (platform = 'HubSpot' OR ungated_link LIKE '%hubspot%')
-          AND type IN ('1-Pager', 'Ebook', 'Customer Story', '1 Pager')
+          AND type IN ('1-Pager', 'Ebook', 'Customer Story')
           AND (extracted_text IS NULL OR extracted_text = '')
           AND ungated_link IS NOT NULL
           AND ungated_link != ''

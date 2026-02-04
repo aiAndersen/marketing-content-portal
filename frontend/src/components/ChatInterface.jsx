@@ -339,6 +339,8 @@ function ChatInterface({
   onClearConversation
 }) {
   const [inputValue, setInputValue] = useState('');
+  const [showVoiceHelper, setShowVoiceHelper] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
@@ -365,11 +367,33 @@ function ChatInterface({
     inputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    if (!voiceSupported || !isInputFocused || loading || isRecording || isTranscribing) {
+      setShowVoiceHelper(false);
+      return;
+    }
+
+    if (!inputValue.trim()) {
+      setShowVoiceHelper(false);
+      return;
+    }
+
+    setShowVoiceHelper(false);
+    const timeoutId = setTimeout(() => {
+      if (!loading && !isRecording && !isTranscribing && inputValue.trim()) {
+        setShowVoiceHelper(true);
+      }
+    }, 4500);
+
+    return () => clearTimeout(timeoutId);
+  }, [inputValue, isInputFocused, loading, isRecording, isTranscribing, voiceSupported]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!inputValue.trim() || loading) return;
     onSendMessage(inputValue.trim());
     setInputValue('');
+    setShowVoiceHelper(false);
   };
 
   const handleSuggestionClick = (suggestion) => {
@@ -379,6 +403,7 @@ function ChatInterface({
 
   // Handle voice input toggle
   const handleVoiceToggle = async () => {
+    setShowVoiceHelper(false);
     if (isRecording) {
       const transcript = await stopRecording();
       if (transcript) {
@@ -606,6 +631,11 @@ function ChatInterface({
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
+          onFocus={() => setIsInputFocused(true)}
+          onBlur={() => {
+            setIsInputFocused(false);
+            setShowVoiceHelper(false);
+          }}
           placeholder={isRecording ? "Listening... click mic to stop" : isTranscribing ? "Transcribing..." : "Ask about marketing content..."}
           disabled={loading || isTranscribing}
           className="chat-input"
@@ -613,21 +643,28 @@ function ChatInterface({
 
         {/* Voice input button */}
         {voiceSupported && (
-          <button
-            type="button"
-            onClick={handleVoiceToggle}
-            disabled={loading || isTranscribing}
-            className={`chat-voice-btn ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`}
-            title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing..." : "Voice input"}
-          >
-            {isTranscribing ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : isRecording ? (
-              <MicOff size={18} />
-            ) : (
-              <Mic size={18} />
+          <div className="chat-voice-wrapper">
+            {showVoiceHelper && (
+              <div className="chat-voice-helper" role="status" aria-live="polite">
+                Try voice input — click the mic for fast speech to text.
+              </div>
             )}
-          </button>
+            <button
+              type="button"
+              onClick={handleVoiceToggle}
+              disabled={loading || isTranscribing}
+              className={`chat-voice-btn ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`}
+              title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing..." : "Voice input"}
+            >
+              {isTranscribing ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : isRecording ? (
+                <MicOff size={18} />
+              ) : (
+                <Mic size={18} />
+              )}
+            </button>
+          </div>
         )}
 
         <button

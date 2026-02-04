@@ -30,7 +30,7 @@ const WEBFLOW_TYPE_MAP = {
   '675223f1c7d4029beaea5081': 'Customer Story',
   '675223f1d5bb34dc72fc6709': 'Event',
   '675223f1bba77df9f4a65aca': 'Blog',
-  '675223f1e57b8177a6e5f8f2': '1 Pager',
+  '675223f1e57b8177a6e5f8f2': '1-Pager',
   '675223f146c059050c3effe6': 'Press Release'
 };
 

@@ -9,7 +9,7 @@
 
 const FORM_FIELDS = {
   type: {
-    options: ['Blog', 'Video', 'Video Clip', 'Customer Story', '1 Pager',
+    options: ['Blog', 'Video', 'Video Clip', 'Customer Story', '1-Pager',
               'Ebook', 'Webinar', 'Press Release', 'Award', 'Landing Page', 'Asset'],
     required: true
   },
@@ -37,7 +37,7 @@ const SYSTEM_PROMPT = `You are a marketing content submission assistant for Scho
 Your job is to parse content descriptions and URLs to extract structured form data.
 
 CONTENT TYPES (choose exactly one):
-Blog, Video, Video Clip, Customer Story, 1 Pager, Ebook, Webinar, Press Release, Award, Landing Page, Asset
+Blog, Video, Video Clip, Customer Story, 1-Pager, Ebook, Webinar, Press Release, Award, Landing Page, Asset
 
 PLATFORMS (choose exactly one):
 Website, YouTube, LinkedIn, HubSpot, Email, Social Media, Other
@@ -63,8 +63,8 @@ RULES:
 6. HUBSPOT URL HANDLING (CRITICAL):
    - Any URL containing "hubspot" = platform "HubSpot"
    - HubSpot PDF URLs (.pdf in hubspot URL):
-     - Type should be "1 Pager" OR "Ebook" based on content analysis
-     - Brief/focused on one topic/single page = "1 Pager"
+     - Type should be "1-Pager" OR "Ebook" based on content analysis
+     - Brief/focused on one topic/single page = "1-Pager"
      - Comprehensive guide/multiple sections = "Ebook"
    - ONLY extract tags from ACTUAL PDF content - do NOT use generic education tags
    - If no meaningful tags can be extracted from content, use minimal or empty tags
@@ -503,17 +503,17 @@ async function parseWithAI(userInput) {
           extractedContexts.push(`IMPORTANT: No YouTube description or transcript available. Generate a brief summary based on the title. Keep tags minimal and factual based only on the title.`);
         }
       } else if (type === 'hubspot-pdf') {
-        urlContexts.push(`[HubSpot PDF URL: ${url}. Set platform to "HubSpot". Type should be "1 Pager" or "Ebook" based on content length/depth.]`);
+        urlContexts.push(`[HubSpot PDF URL: ${url}. Set platform to "HubSpot". Type should be "1-Pager" or "Ebook" based on content length/depth.]`);
         const pdfText = await extractPdfText(url);
         if (pdfText) {
           extractedContexts.push(`HubSpot PDF Content (analyze for tags and type):\n${truncateText(pdfText, 12000)}`);
           extractedContexts.push(`IMPORTANT: Extract tags ONLY from the actual content above. Do NOT use generic tags like "college readiness", "student empowerment", or "counselor" unless explicitly mentioned in the PDF.`);
-          extractedContexts.push(`IMPORTANT: Determine type based on content - brief/single-topic = "1 Pager", comprehensive guide with multiple sections = "Ebook".`);
+          extractedContexts.push(`IMPORTANT: Determine type based on content - brief/single-topic = "1-Pager", comprehensive guide with multiple sections = "Ebook".`);
         }
       } else if (type === 'hubspot') {
         urlContexts.push(`[HubSpot URL: ${url}. Set platform to "HubSpot".]`);
       } else if (type === 'pdf') {
-        urlContexts.push(`[PDF Document URL: ${url} - This might be an Ebook, 1 Pager, or Asset]`);
+        urlContexts.push(`[PDF Document URL: ${url} - This might be an Ebook, 1-Pager, or Asset]`);
         const pdfText = await extractPdfText(url);
         if (pdfText) {
           extractedContexts.push(`PDF text (partial): ${truncateText(pdfText, 12000)}`);
@@ -622,7 +622,7 @@ function fallbackParse(input) {
     'ebook': 'Ebook', 'e-book': 'Ebook', 'guide': 'Ebook', 'whitepaper': 'Ebook',
     'webinar': 'Webinar', 'press release': 'Press Release',
     'award': 'Award', 'landing page': 'Landing Page',
-    '1 pager': '1 Pager', 'one pager': '1 Pager', 'flyer': '1 Pager'
+    '1 pager': '1-Pager', 'one pager': '1-Pager', 'flyer': '1-Pager'
   };
 
   const lowerInput = normalizedInput.toLowerCase();
