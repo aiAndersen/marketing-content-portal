@@ -309,6 +309,23 @@ function App() {
         queryBuilder = queryBuilder.in('state', allStates);
       }
 
+      // Detect if this is a "content type only" search (e.g., "one pager", "case studies")
+      // In this case, we should return ALL items of that type, not filter by keywords
+      const terminologyTypes = aiParams.terminologyDetected?.content_type || [];
+      const contentTypeTerms = ['pager', 'one-pager', 'onepager', '1-pager', 'case', 'study', 'studies',
+        'video', 'clip', 'clips', 'ebook', 'e-book', 'whitepaper', 'webinar', 'blog', 'article',
+        'customer', 'story', 'stories', 'testimonial', 'press', 'release', 'award', 'landing', 'page', 'asset'];
+
+      const isContentTypeOnlySearch = terminologyTypes.length > 0 &&
+        (aiParams.searchTerms || []).every(term =>
+          contentTypeTerms.includes(term.toLowerCase()) ||
+          terminologyTypes.some(t => t.toLowerCase().includes(term.toLowerCase()) || term.toLowerCase().includes(t.toLowerCase()))
+        );
+
+      if (isContentTypeOnlySearch) {
+        console.log('[Search] Content-type-only search detected for:', terminologyTypes, '- skipping keyword filters');
+      }
+
       // Apply comprehensive keyword search across ALL columns (including enriched data)
       // AI has already prioritized search terms and filtered out noise words based on SchooLinks context
 
@@ -352,7 +369,8 @@ function App() {
           });
           queryBuilder = queryBuilder.or(searchConditions.join(','));
         }
-      } else if (aiParams.searchTerms && aiParams.searchTerms.length > 0) {
+      } else if (aiParams.searchTerms && aiParams.searchTerms.length > 0 && !isContentTypeOnlySearch) {
+        // Only apply keyword search if NOT a content-type-only search
         console.log('[Search] AI-prioritized terms:', aiParams.searchTerms, 'Intent:', aiParams.primaryIntent || 'general');
 
         // Build search conditions for each term across all text columns
@@ -372,7 +390,7 @@ function App() {
         });
 
         queryBuilder = queryBuilder.or(searchConditions.join(','));
-      } else if (searchConfig.useRawQueryFallback) {
+      } else if (searchConfig.useRawQueryFallback && !isContentTypeOnlySearch) {
         // Fallback: search all columns with the raw query (including enriched data)
         const searchTerm = query.trim().toLowerCase();
         queryBuilder = queryBuilder.or(
@@ -388,10 +406,11 @@ function App() {
         );
       }
 
-      // Fetch more results for AI ranking (up to 50)
+      // Fetch results - use higher limit for content-type-only searches to get all items
+      const resultLimit = isContentTypeOnlySearch ? 99 : 49; // 100 or 50 results
       const { data, error } = await queryBuilder
         .order('last_updated', { ascending: false, nullsFirst: false })
-        .range(0, 49);
+        .range(0, resultLimit);
 
       if (error) throw error;
 
