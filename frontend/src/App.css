@@ -1853,6 +1853,52 @@ body {
 }
 
 /* Suggestions Panel */
+.suggestions-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, var(--sl-baby-blue) 0%, var(--sl-cream) 100%);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.suggestions-hint {
+  font-size: 0.875rem;
+  color: var(--sl-gray-600);
+  margin: 0;
+}
+
+.btn-generate {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--sl-marina);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-generate:hover:not(:disabled) {
+  background: var(--sl-dusk);
+  transform: translateY(-1px);
+}
+
+.btn-generate:disabled {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+.btn-generate .spin {
+  animation: spin 1s linear infinite;
+}
+
 .suggestions-list {
   display: flex;
   flex-direction: column;

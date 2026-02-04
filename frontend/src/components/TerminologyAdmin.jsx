@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Check, X, Plus, RefreshCw, Brain, TrendingUp, AlertCircle, Search } from 'lucide-react';
+import { Check, X, Plus, RefreshCw, Brain, TrendingUp, AlertCircle, Search, Sparkles } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import {
   getPendingSuggestions,
   approveSuggestion,
   rejectSuggestion,
-  clearTerminologyCache
+  clearTerminologyCache,
+  getFallbackMappings
 } from '../services/terminology';
+
+// OpenAI API key from environment
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
 /**
  * TerminologyAdmin Component
@@ -22,6 +26,8 @@ function TerminologyAdmin() {
   const [analysisReports, setAnalysisReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState('');
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [searchFilter, setSearchFilter] = useState('');
@@ -163,6 +169,192 @@ function TerminologyAdmin() {
     }
   }
 
+  /**
+   * Generate terminology suggestions by analyzing recent prompt logs with AI
+   */
+  async function generateSuggestions() {
+    if (!OPENAI_API_KEY) {
+      setError('OpenAI API key not configured. Cannot generate suggestions.');
+      return;
+    }
+
+    setGenerating(true);
+    setGenerationProgress('Fetching recent search logs...');
+    setError(null);
+
+    try {
+      // Step 1: Fetch recent prompt logs (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const { data: logs, error: logsError } = await supabaseClient
+        .from('ai_prompt_logs')
+        .select('query, recommendations_count, response')
+        .gte('created_at', sevenDaysAgo.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (logsError) {
+        throw new Error(`Failed to fetch logs: ${logsError.message}`);
+      }
+
+      if (!logs || logs.length === 0) {
+        setSuccess('No recent search logs found to analyze.');
+        setGenerating(false);
+        return;
+      }
+
+      setGenerationProgress(`Analyzing ${logs.length} search queries...`);
+
+      // Step 2: Get existing mappings to avoid duplicates
+      const existingMappings = getFallbackMappings();
+      const existingTerms = new Set();
+      Object.values(existingMappings).forEach(typeMap => {
+        Object.keys(typeMap).forEach(term => existingTerms.add(term.toLowerCase()));
+      });
+      allMappings.forEach(m => existingTerms.add(m.user_term.toLowerCase()));
+
+      // Step 3: Prepare log summary for AI
+      const logSummary = logs.map(log => ({
+        query: log.query,
+        results: log.recommendations_count || 0
+      }));
+
+      // Focus on queries with poor results
+      const poorResults = logSummary.filter(l => l.results < 3);
+      const goodResults = logSummary.filter(l => l.results >= 3).slice(0, 20);
+
+      setGenerationProgress('Identifying terminology gaps with AI...');
+
+      // Step 4: Call OpenAI to analyze and suggest mappings
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          temperature: 0.3,
+          messages: [
+            {
+              role: 'system',
+              content: `You are a search quality analyst for a marketing content portal.
+The portal contains: Blogs, Videos, Video Clips, Customer Stories, 1-Pagers, Ebooks, Webinars, Press Releases.
+
+EXISTING TERMINOLOGY MAPPINGS (already handled):
+${JSON.stringify(existingMappings, null, 2)}
+
+TASK: Analyze search queries and suggest NEW terminology mappings that would improve search results.
+Focus on:
+1. Misspellings of content types (e.g., "case study" should map to "Customer Story")
+2. Alternative phrases users might use (e.g., "whitepaper" → "Ebook")
+3. Competitor name misspellings (naviance, xello, powerschool, majorclarity)
+4. Abbreviations (e.g., "wbl" → "work-based learning")
+5. Persona variations (e.g., "guidance counselor" → "counselors")
+
+IMPORTANT: Only suggest mappings that are NOT already in the existing mappings above.
+Only suggest high-confidence mappings where the intent is clear.
+
+Return ONLY valid JSON in this format:
+{
+  "suggestions": [
+    {"user_term": "term users typed", "canonical_term": "correct database term", "map_type": "content_type|competitor|persona|topic|feature", "confidence": 0.8, "reason": "brief explanation"}
+  ],
+  "analysis_summary": "Brief summary of patterns observed"
+}`
+            },
+            {
+              role: 'user',
+              content: `Analyze these search queries:
+
+QUERIES WITH POOR RESULTS (< 3 matches):
+${JSON.stringify(poorResults, null, 2)}
+
+QUERIES WITH GOOD RESULTS (for reference):
+${JSON.stringify(goodResults, null, 2)}
+
+Suggest terminology mappings that would help the poor-performing queries find better results.`
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenAI API error: ${errText}`);
+      }
+
+      const aiResult = await response.json();
+      const content = aiResult.choices?.[0]?.message?.content || '';
+
+      // Parse AI response
+      let suggestions = [];
+      let summary = '';
+      try {
+        // Extract JSON from response (handle markdown code blocks)
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          suggestions = parsed.suggestions || [];
+          summary = parsed.analysis_summary || '';
+        }
+      } catch (parseErr) {
+        console.error('Failed to parse AI response:', parseErr, content);
+        throw new Error('AI returned invalid response format');
+      }
+
+      if (suggestions.length === 0) {
+        setSuccess(`Analysis complete. ${summary || 'No new terminology gaps identified.'}`);
+        setGenerating(false);
+        return;
+      }
+
+      setGenerationProgress(`Found ${suggestions.length} suggestions. Saving...`);
+
+      // Step 5: Insert suggestions into database
+      let insertedCount = 0;
+      for (const suggestion of suggestions) {
+        // Skip if term already exists
+        if (existingTerms.has(suggestion.user_term.toLowerCase())) {
+          continue;
+        }
+
+        try {
+          const { error: insertError } = await supabaseClient
+            .from('terminology_map')
+            .insert({
+              map_type: suggestion.map_type || 'content_type',
+              user_term: suggestion.user_term.toLowerCase(),
+              canonical_term: suggestion.canonical_term,
+              source: 'ai_suggested',
+              confidence: suggestion.confidence || 0.7,
+              is_verified: false,
+              is_active: false // Requires approval
+            });
+
+          if (!insertError) {
+            insertedCount++;
+            existingTerms.add(suggestion.user_term.toLowerCase());
+          }
+        } catch (err) {
+          console.warn('Failed to insert suggestion:', suggestion, err);
+        }
+      }
+
+      // Reload data to show new suggestions
+      await loadData();
+
+      setSuccess(`Generated ${insertedCount} new suggestions for review! ${summary}`);
+    } catch (err) {
+      console.error('Failed to generate suggestions:', err);
+      setError(err.message || 'Failed to generate suggestions');
+    } finally {
+      setGenerating(false);
+      setGenerationProgress('');
+    }
+  }
+
   // Filter mappings based on search and type
   const filteredMappings = allMappings.filter(m => {
     const matchesSearch = searchFilter === '' ||
@@ -277,13 +469,36 @@ function TerminologyAdmin() {
         {/* Pending Suggestions Tab */}
         {activeTab === 'suggestions' && (
           <div className="suggestions-panel">
+            {/* Generate Suggestions Button */}
+            <div className="suggestions-header">
+              <button
+                className="btn-generate"
+                onClick={generateSuggestions}
+                disabled={generating}
+              >
+                {generating ? (
+                  <>
+                    <RefreshCw className="spin" size={18} />
+                    <span>{generationProgress || 'Analyzing...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    <span>Generate Suggestions from Logs</span>
+                  </>
+                )}
+              </button>
+              <p className="suggestions-hint">
+                Analyzes recent search queries to identify terminology gaps
+              </p>
+            </div>
+
             {suggestions.length === 0 ? (
               <div className="empty-state">
                 <Check size={48} />
                 <h3>All Caught Up!</h3>
                 <p>No pending suggestions to review.</p>
-                <p className="hint">Run the log analyzer to generate new suggestions:</p>
-                <code>python3 scripts/log_analyzer.py --days 7 --auto-suggest-terms</code>
+                <p className="hint">Click the button above to analyze recent searches and generate suggestions.</p>
               </div>
             ) : (
               <div className="suggestions-list">
