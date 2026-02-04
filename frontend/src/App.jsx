@@ -299,9 +299,41 @@ function App() {
 
       let queryBuilder = supabaseClient.from('marketing_content').select('*');
 
-      // Apply AI-detected type filters (merge with user-selected)
-      if (allTypes.length > 0) {
-        queryBuilder = queryBuilder.in('type', allTypes);
+      // BACKUP: Direct content type detection from query text
+      // This ensures type filtering works even if terminology service fails
+      const queryLower = query.toLowerCase();
+      const directTypeDetection = {
+        '1-Pager': ['one pager', 'one-pager', 'onepager', '1 pager', '1-pager', 'pager', 'fact sheet', 'factsheet', 'flyer', 'brochure'],
+        'Customer Story': ['case study', 'case-study', 'casestudy', 'customer story', 'success story', 'testimonial'],
+        'Ebook': ['ebook', 'e-book', 'whitepaper', 'white paper', 'guide', 'handbook'],
+        'Video': ['video', 'tutorial', 'demo'],
+        'Video Clip': ['video clip', 'clip', 'clips', 'snippet', 'short video'],
+        'Webinar': ['webinar', 'web seminar'],
+        'Blog': ['blog', 'article', 'blog post']
+      };
+
+      let backupDetectedTypes = [];
+      for (const [contentType, terms] of Object.entries(directTypeDetection)) {
+        for (const term of terms) {
+          if (queryLower.includes(term)) {
+            if (!backupDetectedTypes.includes(contentType)) {
+              backupDetectedTypes.push(contentType);
+              console.log(`[Search] Backup detection: "${term}" → ${contentType}`);
+            }
+            break;
+          }
+        }
+      }
+
+      // Merge backup-detected types with AI-detected types
+      const finalTypes = [...new Set([...allTypes, ...backupDetectedTypes])];
+      if (backupDetectedTypes.length > 0 && allTypes.length === 0) {
+        console.log('[Search] Using backup type detection:', backupDetectedTypes);
+      }
+
+      // Apply type filters (merge AI + backup + user-selected)
+      if (finalTypes.length > 0) {
+        queryBuilder = queryBuilder.in('type', finalTypes);
       }
 
       // Apply AI-detected state filters (merge with user-selected)
@@ -312,14 +344,16 @@ function App() {
       // Detect if this is a "content type only" search (e.g., "one pager", "case studies")
       // In this case, we should return ALL items of that type, not filter by keywords
       const terminologyTypes = aiParams.terminologyDetected?.content_type || [];
+      const allDetectedTypes = [...new Set([...terminologyTypes, ...backupDetectedTypes])];
       const contentTypeTerms = ['pager', 'one-pager', 'onepager', '1-pager', 'case', 'study', 'studies',
         'video', 'clip', 'clips', 'ebook', 'e-book', 'whitepaper', 'webinar', 'blog', 'article',
-        'customer', 'story', 'stories', 'testimonial', 'press', 'release', 'award', 'landing', 'page', 'asset'];
+        'customer', 'story', 'stories', 'testimonial', 'press', 'release', 'award', 'landing', 'page', 'asset',
+        'one', 'fact', 'sheet'];
 
-      const isContentTypeOnlySearch = terminologyTypes.length > 0 &&
+      const isContentTypeOnlySearch = allDetectedTypes.length > 0 &&
         (aiParams.searchTerms || []).every(term =>
           contentTypeTerms.includes(term.toLowerCase()) ||
-          terminologyTypes.some(t => t.toLowerCase().includes(term.toLowerCase()) || term.toLowerCase().includes(t.toLowerCase()))
+          allDetectedTypes.some(t => t.toLowerCase().includes(term.toLowerCase()) || term.toLowerCase().includes(t.toLowerCase()))
         );
 
       if (isContentTypeOnlySearch) {
