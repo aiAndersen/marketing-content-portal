@@ -650,6 +650,46 @@ function App() {
         .from('marketing_content')
         .select('*');
 
+      // CONTENT TYPE DETECTION: Apply type filter if user is searching for a content type
+      // This handles queries like "one pager", "case studies", "videos", etc.
+      const chatQueryLower = message.toLowerCase();
+      const chatTypeDetection = {
+        '1-Pager': ['one pager', 'one-pager', 'onepager', '1 pager', '1-pager', 'pager', 'fact sheet', 'factsheet', 'flyer', 'brochure', 'oen pager', 'on pager'],
+        'Customer Story': ['case study', 'case-study', 'casestudy', 'customer story', 'success story', 'testimonial', 'customer stories', 'case studies'],
+        'Ebook': ['ebook', 'e-book', 'whitepaper', 'white paper', 'guide', 'handbook', 'ebooks', 'whitepapers'],
+        'Video': ['video', 'videos', 'tutorial', 'demo'],
+        'Video Clip': ['video clip', 'video clips', 'clip', 'clips', 'snippet', 'short video'],
+        'Webinar': ['webinar', 'webinars', 'web seminar'],
+        'Blog': ['blog', 'blogs', 'article', 'articles', 'blog post']
+      };
+
+      let chatDetectedTypes = [];
+      // Also use terminology-detected types
+      const terminologyDetectedTypes = aiParams.types || [];
+      if (terminologyDetectedTypes.length > 0) {
+        chatDetectedTypes = [...terminologyDetectedTypes];
+        console.log('[Chat] Using terminology-detected types:', terminologyDetectedTypes);
+      }
+
+      // Backup detection from query text
+      for (const [contentType, terms] of Object.entries(chatTypeDetection)) {
+        for (const term of terms) {
+          if (chatQueryLower.includes(term)) {
+            if (!chatDetectedTypes.includes(contentType)) {
+              chatDetectedTypes.push(contentType);
+              console.log(`[Chat] Backup type detection: "${term}" → ${contentType}`);
+            }
+            break;
+          }
+        }
+      }
+
+      // Apply content type filter if types were detected
+      if (chatDetectedTypes.length > 0) {
+        console.log('[Chat] Applying type filter:', chatDetectedTypes);
+        queryBuilder = queryBuilder.in('type', chatDetectedTypes);
+      }
+
       // IMPORTANT: Apply state filter FIRST if states were detected
       // This ensures state-specific searches return ONLY that state's content
       if (detectedStates.length > 0) {
@@ -678,7 +718,20 @@ function App() {
           }).includes(t.toLowerCase()) && !['content', 'stuff', 'resources'].includes(t.toLowerCase()))
         : searchTerms;
 
-      if (filteredSearchTerms.length > 0) {
+      // Detect if this is a content-type-only search (e.g., "one pager", "case studies")
+      // In this case, we should return ALL items of that type, not filter by keywords
+      const chatContentTypeTerms = ['pager', 'one-pager', 'onepager', '1-pager', 'case', 'study', 'studies',
+        'video', 'clip', 'clips', 'ebook', 'e-book', 'whitepaper', 'webinar', 'blog', 'article',
+        'customer', 'story', 'stories', 'testimonial', 'one', 'fact', 'sheet', 'oen'];
+
+      const isChatTypeOnlySearch = chatDetectedTypes.length > 0 &&
+        filteredSearchTerms.every(term =>
+          chatContentTypeTerms.includes(term.toLowerCase()) ||
+          chatDetectedTypes.some(t => t.toLowerCase().includes(term.toLowerCase()) || term.toLowerCase().includes(t.toLowerCase()))
+        );
+
+      // Only apply keyword search if NOT a type-only search
+      if (filteredSearchTerms.length > 0 && !isChatTypeOnlySearch) {
         const searchConditions = filteredSearchTerms.flatMap(term => {
           const t = term.toLowerCase();
           return [
@@ -691,6 +744,8 @@ function App() {
           ];
         });
         queryBuilder = queryBuilder.or(searchConditions.join(','));
+      } else if (isChatTypeOnlySearch) {
+        console.log('[Chat] Content-type-only search - skipping keyword filters, returning all', chatDetectedTypes);
       }
 
       const { data } = await queryBuilder
