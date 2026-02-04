@@ -1760,13 +1760,14 @@ body {
   border-color: var(--sl-yellow);
 }
 
-.stat-value {
+/* Scoped to stat-card to avoid overriding header stats */
+.stat-card .stat-value {
   font-size: 2rem;
   font-weight: var(--font-weight-bold);
   color: var(--sl-black);
 }
 
-.stat-label {
+.stat-card .stat-label {
   font-size: 0.875rem;
   color: var(--sl-gray-600);
   margin-top: var(--spacing-xs);
