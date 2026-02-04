@@ -312,26 +312,41 @@ function App() {
         'Blog': ['blog', 'article', 'blog post']
       };
 
+      // Database has inconsistent type values - map detected types to ALL possible variations
+      const typeVariations = {
+        '1-Pager': ['1-Pager', '1 Pager'],  // Some records have hyphen, some have space
+        'Video Clip': ['Video Clip', 'VideoClip']
+      };
+
       let backupDetectedTypes = [];
       for (const [contentType, terms] of Object.entries(directTypeDetection)) {
         for (const term of terms) {
           if (queryLower.includes(term)) {
-            if (!backupDetectedTypes.includes(contentType)) {
-              backupDetectedTypes.push(contentType);
-              console.log(`[Search] Backup detection: "${term}" → ${contentType}`);
+            // Add the detected type AND any variations
+            const variations = typeVariations[contentType] || [contentType];
+            for (const variant of variations) {
+              if (!backupDetectedTypes.includes(variant)) {
+                backupDetectedTypes.push(variant);
+              }
             }
+            console.log(`[Search] Backup detection: "${term}" → ${contentType} (+ variations: ${variations.join(', ')})`);
             break;
           }
         }
       }
 
-      // Merge backup-detected types with AI-detected types
-      const finalTypes = [...new Set([...allTypes, ...backupDetectedTypes])];
-      if (backupDetectedTypes.length > 0 && allTypes.length === 0) {
-        console.log('[Search] Using backup type detection:', backupDetectedTypes);
+      // Merge backup-detected types with AI-detected types, expanding with variations
+      let expandedAITypes = [];
+      for (const type of allTypes) {
+        const variations = typeVariations[type] || [type];
+        expandedAITypes.push(...variations);
+      }
+      const finalTypes = [...new Set([...expandedAITypes, ...backupDetectedTypes])];
+      if (backupDetectedTypes.length > 0) {
+        console.log('[Search] Final types with variations:', finalTypes);
       }
 
-      // Apply type filters (merge AI + backup + user-selected)
+      // Apply type filters (merge AI + backup + user-selected, with all variations)
       if (finalTypes.length > 0) {
         queryBuilder = queryBuilder.in('type', finalTypes);
       }
@@ -663,30 +678,42 @@ function App() {
         'Blog': ['blog', 'blogs', 'article', 'articles', 'blog post']
       };
 
+      // Database has inconsistent type values - map to ALL possible variations
+      const chatTypeVariations = {
+        '1-Pager': ['1-Pager', '1 Pager'],  // Some records have hyphen, some have space
+        'Video Clip': ['Video Clip', 'VideoClip']
+      };
+
       let chatDetectedTypes = [];
-      // Also use terminology-detected types
+      // Also use terminology-detected types (expand with variations)
       const terminologyDetectedTypes = aiParams.types || [];
       if (terminologyDetectedTypes.length > 0) {
-        chatDetectedTypes = [...terminologyDetectedTypes];
-        console.log('[Chat] Using terminology-detected types:', terminologyDetectedTypes);
+        for (const type of terminologyDetectedTypes) {
+          const variations = chatTypeVariations[type] || [type];
+          chatDetectedTypes.push(...variations);
+        }
+        console.log('[Chat] Using terminology-detected types with variations:', chatDetectedTypes);
       }
 
-      // Backup detection from query text
+      // Backup detection from query text (add variations)
       for (const [contentType, terms] of Object.entries(chatTypeDetection)) {
         for (const term of terms) {
           if (chatQueryLower.includes(term)) {
-            if (!chatDetectedTypes.includes(contentType)) {
-              chatDetectedTypes.push(contentType);
-              console.log(`[Chat] Backup type detection: "${term}" → ${contentType}`);
+            const variations = chatTypeVariations[contentType] || [contentType];
+            for (const variant of variations) {
+              if (!chatDetectedTypes.includes(variant)) {
+                chatDetectedTypes.push(variant);
+              }
             }
+            console.log(`[Chat] Backup type detection: "${term}" → ${variations.join(', ')}`);
             break;
           }
         }
       }
 
-      // Apply content type filter if types were detected
+      // Apply content type filter if types were detected (includes all variations)
       if (chatDetectedTypes.length > 0) {
-        console.log('[Chat] Applying type filter:', chatDetectedTypes);
+        console.log('[Chat] Applying type filter with variations:', chatDetectedTypes);
         queryBuilder = queryBuilder.in('type', chatDetectedTypes);
       }
 
