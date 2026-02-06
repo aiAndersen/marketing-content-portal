@@ -32,7 +32,23 @@ const FORM_FIELDS = {
   tags: { required: false }
 };
 
-const SYSTEM_PROMPT = `You are a marketing content submission assistant for SchoolLinks, an education technology company focused on college and career readiness.
+const SYSTEM_PROMPT = `You are a marketing content submission assistant for SchooLinks, an education technology company focused on college and career readiness.
+
+## ABOUT SCHOOLINKS
+SchooLinks is a unified college & career readiness (CCR) platform designed to support every student (college-bound, career-bound, undecided) while giving staff actionable workflows and real-time reporting.
+
+KEY FEATURES (use these in tags when mentioned):
+- KRI (Key Readiness Indicators) - centralized compliance tracking with drill-down views
+- PLP (Personalized Learning Plans) - state-mandated plans (also called ILP, ECAP, HSBP, PGP)
+- Course Planner - 4-year academic planning with error checking
+- CAM (College Application Management) - application tracking + transcript center
+- WBL (Work-Based Learning) - internship/apprenticeship program management + timesheets
+- Pulse - student wellness/SEL with CASEL-aligned content
+- Game of Life - financial literacy simulation
+
+TARGET PERSONAS: Counselors, District Admins, CTE/WBL Leaders, State Accountability Offices
+
+KEY COMPETITORS: PowerSchool Naviance, Xello, MajorClarity, YouScience Brightpath, Kuder Navigator
 
 Your job is to parse content descriptions and URLs to extract structured form data.
 
@@ -70,29 +86,57 @@ RULES:
    - If no meaningful tags can be extracted from content, use minimal or empty tags
 7. If given a schoolinks.com URL, set platform to "Website"
 8. For URLs, the live_link should be the public-facing URL
-9. Suggest relevant tags based on ACTUAL content (not generic education tags)
-10. Default state to "National" unless a specific state/district is mentioned
-11. Clean up titles - proper capitalization, make them engaging
-12. Infer content type from context (case study = Customer Story, whitepaper = Ebook, etc.)
-13. Always spell the brand name as "SchooLinks" (capital S and L)
+9. Default state to "National" unless a specific state/district is mentioned
+10. Clean up titles - proper capitalization, make them engaging
+11. Infer content type from context (case study = Customer Story, whitepaper = Ebook, etc.)
+12. Always spell the brand name as "SchooLinks" (capital S and L, no space)
 
-STATE DETECTION HINTS:
-- Look for state names (Texas, California, New York, etc.)
-- Look for major cities (Austin, Houston, Los Angeles, Chicago, Atlanta, etc.)
-- Look for school district names (often include city/state: "Austin ISD", "Denver Public Schools")
-- Look for state abbreviations in the content
+TAGGING GUIDELINES (CRITICAL):
+- DO NOT include "SchooLinks" or brand variations as tags (redundant - all content is SchooLinks)
+- DO NOT include state names or abbreviations as tags (captured in state field)
+- DO NOT include content type as tags (captured in type field)
+- DO NOT include generic terms like "education", "K-12", "students", "schools"
+- DO include specific features when mentioned: KRI, PLP, WBL, Course Planner, CAM, Pulse
+- DO include personas when addressed: counselors, administrators, CTE coordinators
+- DO include specific topics: FAFSA, graduation tracking, career exploration, internships
+- DO include competitor names ONLY if content specifically discusses them
+- DO include state-specific legislation references: HB 773, CCMR, ACP, ICAP, etc.
+- Aim for 4-8 specific, meaningful tags based on ACTUAL content
+
+STATE DETECTION (CRITICAL - Do not default to National if a district is mentioned):
+- Look for state names (Texas, California, New York, Illinois, etc.)
+- Look for major cities (Austin, Houston, Los Angeles, Chicago, Atlanta, Crystal Lake, etc.)
+- Look for school district names - these ALWAYS indicate a specific state:
+  * "District 155" or "Community High School District 155" = IL (Crystal Lake, Illinois)
+  * "Austin ISD", "Houston ISD", "Dallas ISD" = TX
+  * "LAUSD", "San Diego Unified" = CA
+  * "Chicago Public Schools" = IL
+  * "NYC DOE", "Buffalo Public" = NY
+  * "Miami-Dade", "Broward", "Hillsborough" = FL
+  * "Bow High School" = NH
+  * "Clark County" = NV
+- If a numbered district is mentioned (e.g., "District 155"), research or infer the state
+- NEVER default to "National" if ANY district, city, or school name is mentioned
+
+SUMMARY GENERATION (for Customer Stories especially):
+- Generate COMPREHENSIVE summaries (3-5 sentences minimum)
+- Include specific details: district name, student count, outcomes achieved
+- Mention specific SchooLinks features used (KRI, WBL, PLP, etc.)
+- Include quantifiable results if mentioned (%, numbers, improvements)
+- Capture the "story" - what problem was solved, what was the journey
+- Example: "Community High School District 155 in Crystal Lake, Illinois partnered with SchooLinks to scale their work-based learning program. The district implemented SchooLinks' WBL module to manage internship placements, track student hours, and connect with local industry partners. Since implementation, they've increased student WBL participation by X% and streamlined coordinator workflows."
 
 Return ONLY valid JSON in this exact format:
 {
   "fields": {
     "type": { "value": "Customer Story", "confidence": 0.95 },
-    "title": { "value": "How Austin ISD Transformed College Readiness", "confidence": 0.9 },
+    "title": { "value": "How Austin ISD Transformed College Readiness with KRI", "confidence": 0.9 },
     "live_link": { "value": "https://...", "confidence": 1.0 },
     "ungated_link": { "value": null, "confidence": 0.8 },
     "platform": { "value": "Website", "confidence": 0.85 },
     "state": { "value": "TX", "confidence": 0.9 },
-    "summary": { "value": "Discover how Austin ISD partnered with SchoolLinks to...", "confidence": 0.8 },
-    "tags": { "value": "college readiness, Texas, district success, K-12", "confidence": 0.75 }
+    "summary": { "value": "Discover how Austin ISD partnered with SchooLinks to...", "confidence": 0.8 },
+    "tags": { "value": "KRI, CCMR, counselors, graduation tracking, FAFSA completion", "confidence": 0.75 }
   },
   "missingFields": [],
   "clarificationNeeded": null
@@ -282,6 +326,66 @@ function normalizeBrandName(text) {
     .replace(/\bscholinks\b/gi, 'SchooLinks');
 }
 
+/**
+ * Normalize and deduplicate tags
+ * - Removes brand name (SchooLinks) - redundant since all content is SchooLinks
+ * - Removes state names/abbreviations - captured in state field
+ * - Removes content types - captured in type field
+ * - Removes generic education terms
+ * - Deduplicates and normalizes case
+ */
+function normalizeAndDeduplicateTags(tagsString, detectedState, detectedType) {
+  if (!tagsString) return '';
+
+  let tags = tagsString.split(/[,;]/).map(t => t.trim().toLowerCase()).filter(Boolean);
+
+  const excludeTerms = new Set([
+    // Brand (redundant - all content is SchooLinks)
+    'schoolinks', 'schooLinks', 'school links', 'sl',
+    // State abbreviations (captured in state field)
+    'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'de', 'fl', 'ga', 'hi', 'id', 'il', 'in',
+    'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv',
+    'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn',
+    'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy', 'national',
+    // Common state names
+    'texas', 'california', 'florida', 'new york', 'ohio', 'illinois', 'pennsylvania',
+    'georgia', 'michigan', 'north carolina', 'colorado', 'arizona', 'washington',
+    // Content types (captured in type field)
+    'blog', 'video', 'video clip', 'customer story', '1-pager', 'ebook', 'e-book',
+    'webinar', 'press release', 'award', 'landing page', 'asset', 'one pager', 'one-pager',
+    // Generic education terms (too broad to be useful)
+    'education', 'edtech', 'k-12', 'k12', 'students', 'schools', 'learning',
+    'student success', 'student empowerment', 'school district'
+  ]);
+
+  // Add detected state and type to exclusions
+  if (detectedState) {
+    excludeTerms.add(detectedState.toLowerCase());
+  }
+  if (detectedType) {
+    excludeTerms.add(detectedType.toLowerCase());
+  }
+
+  // Filter, deduplicate, and normalize
+  const seen = new Set();
+  const normalized = [];
+
+  for (const tag of tags) {
+    const key = tag.replace(/[^a-z0-9\s]/g, '').trim();
+    if (key.length >= 2 && !excludeTerms.has(key) && !seen.has(key)) {
+      seen.add(key);
+      // Capitalize first letter of each word
+      const displayTag = tag.split(' ').map(w =>
+        w.charAt(0).toUpperCase() + w.slice(1)
+      ).join(' ');
+      normalized.push(displayTag);
+    }
+  }
+
+  // Limit to 8 most relevant tags
+  return normalized.slice(0, 8).join(', ');
+}
+
 function truncateText(text, maxChars) {
   if (!text) return '';
   if (text.length <= maxChars) return text;
@@ -451,6 +555,215 @@ async function ocrPdfFile(file, maxPages = 3) {
   return combined;
 }
 
+/**
+ * Fetch and extract text content from a webpage
+ * Uses CORS proxies since browser can't fetch cross-origin directly
+ */
+async function fetchWebpageContent(url) {
+  try {
+    // List of CORS proxies to try (browsers block direct cross-origin requests)
+    const corsProxies = [
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    ];
+
+    let html = null;
+
+    // Try each proxy until one works
+    for (const proxyFn of corsProxies) {
+      try {
+        const proxyUrl = proxyFn(url);
+        console.log('Trying CORS proxy for webpage...');
+
+        const response = await fetch(proxyUrl, {
+          headers: { 'Accept': 'text/html,application/xhtml+xml,*/*' }
+        });
+
+        if (response.ok) {
+          const text = await response.text();
+          if (text && text.length > 500 && text.includes('<')) {
+            html = text;
+            console.log('Successfully fetched webpage via CORS proxy');
+            break;
+          }
+        }
+      } catch (proxyError) {
+        console.warn('CORS proxy failed, trying next...', proxyError.message);
+        continue;
+      }
+    }
+
+    if (!html) {
+      console.warn('All CORS proxies failed for:', url);
+      return null;
+    }
+
+    // Parse HTML and extract meaningful content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Remove script, style, nav, footer, header elements
+    const removeSelectors = ['script', 'style', 'nav', 'footer', 'header', 'noscript', 'iframe', 'svg'];
+    removeSelectors.forEach(selector => {
+      doc.querySelectorAll(selector).forEach(el => el.remove());
+    });
+
+    // Try to find main content areas (common patterns)
+    const contentSelectors = [
+      'article',
+      'main',
+      '[role="main"]',
+      '.content',
+      '.post-content',
+      '.entry-content',
+      '.article-content',
+      '.page-content',
+      '#content',
+      '.resource-content',
+      '.case-study-content'
+    ];
+
+    let contentText = '';
+
+    // First try to get structured content
+    for (const selector of contentSelectors) {
+      const element = doc.querySelector(selector);
+      if (element) {
+        contentText = element.textContent;
+        break;
+      }
+    }
+
+    // Fallback to body if no main content found
+    if (!contentText || contentText.length < 100) {
+      contentText = doc.body?.textContent || '';
+    }
+
+    // Clean up the text
+    contentText = contentText
+      .replace(/\s+/g, ' ')
+      .replace(/\n+/g, '\n')
+      .trim();
+
+    // Extract meta description if available
+    const metaDesc = doc.querySelector('meta[name="description"]')?.content || '';
+    const ogDesc = doc.querySelector('meta[property="og:description"]')?.content || '';
+    const pageTitle = doc.querySelector('title')?.textContent || '';
+
+    // Combine metadata with content
+    let result = '';
+    if (pageTitle) result += `Page Title: ${pageTitle}\n`;
+    if (metaDesc) result += `Description: ${metaDesc}\n`;
+    if (ogDesc && ogDesc !== metaDesc) result += `OG Description: ${ogDesc}\n`;
+    result += `\nPage Content:\n${contentText}`;
+
+    return result;
+  } catch (error) {
+    console.warn('Webpage content extraction failed:', error);
+    return null;
+  }
+}
+
+// Known school districts and their states for better detection
+const DISTRICT_STATE_MAP = {
+  // Illinois
+  'district 155': 'IL', 'community high school district 155': 'IL', 'd155': 'IL',
+  'chicago public': 'IL', 'cps': 'IL',
+  // Texas
+  'austin isd': 'TX', 'houston isd': 'TX', 'dallas isd': 'TX', 'fort worth isd': 'TX',
+  'san antonio isd': 'TX', 'el paso isd': 'TX', 'arlington isd': 'TX',
+  'plano isd': 'TX', 'frisco isd': 'TX', 'round rock isd': 'TX',
+  // California
+  'lausd': 'CA', 'los angeles unified': 'CA', 'san diego unified': 'CA',
+  'san francisco unified': 'CA', 'fresno unified': 'CA', 'oakland unified': 'CA',
+  // New York
+  'nyc doe': 'NY', 'new york city': 'NY', 'buffalo public': 'NY',
+  // Florida
+  'miami-dade': 'FL', 'broward': 'FL', 'hillsborough': 'FL', 'orange county public': 'FL',
+  // Ohio
+  'columbus city': 'OH', 'cleveland metropolitan': 'OH', 'cincinnati public': 'OH',
+  // Georgia
+  'fulton county': 'GA', 'gwinnett county': 'GA', 'dekalb county': 'GA', 'cobb county': 'GA',
+  // Michigan
+  'detroit public': 'MI', 'grand rapids': 'MI', 'ann arbor': 'MI',
+  // Pennsylvania
+  'philadelphia': 'PA', 'pittsburgh public': 'PA',
+  // Nevada
+  'clark county': 'NV', 'washoe county': 'NV',
+  // New Hampshire
+  'bow': 'NH', 'bow high school': 'NH',
+  // Wisconsin
+  'milwaukee public': 'WI', 'madison metropolitan': 'WI',
+  // Colorado
+  'denver public': 'CO', 'jefferson county': 'CO', 'douglas county': 'CO',
+  // North Carolina
+  'charlotte-mecklenburg': 'NC', 'wake county': 'NC', 'guilford county': 'NC',
+  // Arizona
+  'mesa public': 'AZ', 'tucson unified': 'AZ', 'phoenix union': 'AZ',
+  // Tennessee
+  'metro nashville': 'TN', 'shelby county': 'TN', 'knox county': 'TN',
+  // Washington
+  'seattle public': 'WA', 'tacoma public': 'WA', 'spokane public': 'WA',
+  // Indiana
+  'indianapolis public': 'IN', 'fort wayne': 'IN',
+  // Missouri
+  'st. louis public': 'MO', 'kansas city': 'MO',
+  // Maryland
+  'montgomery county': 'MD', 'prince george\'s county': 'MD', 'baltimore': 'MD',
+  // Virginia
+  'fairfax county': 'VA', 'virginia beach': 'VA', 'loudoun county': 'VA',
+  // Massachusetts
+  'boston public': 'MA', 'springfield': 'MA', 'worcester': 'MA',
+  // Kentucky
+  'jefferson county': 'KY', 'fayette county': 'KY',
+  // South Carolina
+  'greenville county': 'SC', 'charleston county': 'SC',
+  // Alabama
+  'mobile county': 'AL', 'jefferson county': 'AL',
+  // Louisiana
+  'east baton rouge': 'LA', 'jefferson parish': 'LA', 'orleans parish': 'LA',
+  // Oklahoma
+  'oklahoma city': 'OK', 'tulsa public': 'OK',
+  // Utah
+  'granite': 'UT', 'davis': 'UT', 'jordan': 'UT', 'alpine': 'UT', 'canyons': 'UT',
+  // Minnesota
+  'minneapolis public': 'MN', 'st. paul public': 'MN', 'anoka-hennepin': 'MN',
+  // Iowa
+  'des moines': 'IA', 'cedar rapids': 'IA',
+  // Nebraska
+  'omaha public': 'NE', 'lincoln public': 'NE',
+  // Kansas
+  'wichita': 'KS', 'olathe': 'KS', 'shawnee mission': 'KS',
+  // New Mexico
+  'albuquerque public': 'NM',
+  // Oregon
+  'portland public': 'OR', 'salem-keizer': 'OR',
+  // Connecticut
+  'hartford public': 'CT', 'new haven': 'CT', 'bridgeport': 'CT',
+  // Arkansas
+  'little rock': 'AR', 'pulaski county': 'AR',
+  // Mississippi
+  'jackson public': 'MS',
+  // West Virginia
+  'kanawha county': 'WV',
+};
+
+/**
+ * Try to detect state from text content using district names
+ */
+function detectStateFromContent(text) {
+  if (!text) return null;
+  const lowerText = text.toLowerCase();
+
+  for (const [district, state] of Object.entries(DISTRICT_STATE_MAP)) {
+    if (lowerText.includes(district)) {
+      return state;
+    }
+  }
+  return null;
+}
+
 // ============================================
 // OPENAI INTEGRATION WITH URL CONTEXT
 // ============================================
@@ -519,7 +832,39 @@ async function parseWithAI(userInput) {
           extractedContexts.push(`PDF text (partial): ${truncateText(pdfText, 12000)}`);
         }
       } else if (type === 'website') {
-        urlContexts.push(`[Website URL: ${url} - Set platform to "Website"]`);
+        urlContexts.push(`[Website URL: ${url} - Set platform to "Website". This is likely a Customer Story or resource page.]`);
+
+        // Try to detect state from URL first (works even if fetch fails)
+        const urlStateHint = detectStateFromContent(url);
+
+        // Fetch webpage content for richer context
+        try {
+          if (typeof addMessage === 'function' && elements?.chatMessages) {
+            addMessage('assistant', '🔍 Fetching webpage content...');
+          }
+        } catch (e) { /* ignore UI errors */ }
+
+        const webpageContent = await fetchWebpageContent(url);
+        if (webpageContent) {
+          extractedContexts.push(`Webpage Content (use this for summary, tags, and state detection):\n${truncateText(webpageContent, 15000)}`);
+          extractedContexts.push(`IMPORTANT: Generate a COMPREHENSIVE summary (3-5 sentences) based on the webpage content above. Include specific details like district name, outcomes, metrics, and features used.`);
+          extractedContexts.push(`IMPORTANT: Carefully analyze the content to identify the state/region. Look for district names, city names, or state references. Many district names indicate specific states (e.g., "District 155" is in Illinois, "Austin ISD" is in Texas).`);
+
+          // Try to detect state from content
+          const detectedState = detectStateFromContent(webpageContent);
+          if (detectedState) {
+            extractedContexts.push(`STATE HINT: Based on district name detection, this content appears to be from ${detectedState}. Set state to "${detectedState}".`);
+          } else if (urlStateHint) {
+            extractedContexts.push(`STATE HINT: Based on URL analysis, this content appears to be from ${urlStateHint}. Set state to "${urlStateHint}".`);
+          }
+        } else {
+          // Webpage fetch failed - provide hints from URL
+          extractedContexts.push(`IMPORTANT: Could not fetch webpage content directly. Analyze the URL for context.`);
+          if (urlStateHint) {
+            extractedContexts.push(`STATE HINT: The URL contains "district-155" which refers to Community High School District 155 in Crystal Lake, Illinois. Set state to "IL".`);
+          }
+          extractedContexts.push(`URL Analysis: "${url}" - Extract district name, topic, and any other details from the URL path.`);
+        }
       } else {
         urlContexts.push(`[URL: ${url}]`);
       }
@@ -532,29 +877,56 @@ async function parseWithAI(userInput) {
     }
   }
 
-  // Use serverless proxy to keep API key secure
-  const response = await fetch('/api/openai', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: enhancedPrompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 1000
-    })
-  });
+  // Use serverless proxy to keep API key secure, with local dev fallback
+  let response;
+  let data;
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `API error: ${response.status}`);
+  const requestBody = {
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: enhancedPrompt }
+    ],
+    temperature: 0.3,
+    max_tokens: 1500  // Increased for richer summaries
+  };
+
+  try {
+    response = await fetch('/api/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      throw new Error(`API proxy error: ${response.status}`);
+    }
+
+    data = await response.json();
+  } catch (proxyError) {
+    // Fallback to direct OpenAI API for local development
+    console.log('Falling back to local dev OpenAI config...');
+
+    if (typeof LOCAL_DEV_CONFIG === 'undefined' || !LOCAL_DEV_CONFIG.openaiKey) {
+      throw new Error('OpenAI API unavailable. Set LOCAL_DEV_CONFIG.openaiKey in config.js for local development.');
+    }
+
+    response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LOCAL_DEV_CONFIG.openaiKey}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `OpenAI API error: ${response.status}`);
+    }
+
+    data = await response.json();
   }
-
-  const data = await response.json();
   const content = data.choices[0]?.message?.content;
 
   if (!content) {
@@ -567,6 +939,15 @@ async function parseWithAI(userInput) {
   }
 
   const result = JSON.parse(jsonMatch[0]);
+
+  // Normalize and deduplicate tags to remove redundant brand/state/type mentions
+  if (result.fields.tags?.value) {
+    result.fields.tags.value = normalizeAndDeduplicateTags(
+      result.fields.tags.value,
+      result.fields.state?.value,
+      result.fields.type?.value
+    );
+  }
 
   // Auto-fill URL if detected but not in response
   if (urls.length > 0 && (!result.fields.live_link || !result.fields.live_link.value)) {

@@ -230,6 +230,50 @@ See [VERCEL-SETUP.md](./VERCEL-SETUP.md) for detailed Vercel configuration and t
 - ✅ Mobile-responsive design
 - ✅ Real-time updates
 
+## 🤖 AI Self-Improvement Agent
+
+The portal includes a powerful self-improvement agent that continuously improves the Content Submission AI Assistant.
+
+### Quick Start
+
+```bash
+# Install dependencies
+pip install openai psycopg2-binary python-dotenv
+
+# Set environment variables
+export OPENAI_API_KEY="your-openai-key"
+export DATABASE_URL="your-database-url"
+
+# Run full analysis
+python3 scripts/submission_agent_improver.py
+```
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `python3 scripts/submission_agent_improver.py` | Full analysis report |
+| `--fix-tags` | Fix redundant tags (preview) |
+| `--fix-tags --apply` | Fix redundant tags (apply changes) |
+| `--fix-spelling --apply` | Fix brand misspellings |
+| `--analyze-prompt` | AI-powered SYSTEM_PROMPT analysis |
+| `--suggest-terms` | AI-powered terminology suggestions |
+| `--all --apply` | Run all fixes |
+
+### What It Fixes
+
+1. **Redundant Tags** - Removes brand name, state, content type from tags
+2. **Brand Misspellings** - Fixes "SchoolLinks" → "SchooLinks"
+3. **SYSTEM_PROMPT Quality** - AI analysis of prompt effectiveness
+4. **Terminology Gaps** - Suggests new search term mappings
+
+### When to Run
+
+- After bulk content imports
+- Weekly maintenance
+- When search quality degrades
+- Before major releases
+
 ## 🛠️ Customization
 
 ### Adding New Columns
