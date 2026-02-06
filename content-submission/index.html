@@ -256,6 +256,99 @@
           </button>
         </div>
 
+        <!-- Weekly GTM Report Panel -->
+        <div class="gtm-report-panel" id="gtm-report-panel">
+          <div class="gtm-header" onclick="toggleGTMPanel()">
+            <div class="gtm-header-left">
+              <span class="gtm-icon">📊</span>
+              <h3>Weekly GTM Report</h3>
+              <span class="gtm-badge">Last 7 Days</span>
+            </div>
+            <div class="gtm-header-right">
+              <button class="btn btn-sm btn-primary" onclick="generateGTMReport(event)">
+                Generate Report
+              </button>
+              <span class="gtm-chevron">▼</span>
+            </div>
+          </div>
+
+          <div class="gtm-content" id="gtm-content">
+            <!-- Summary Stats Row -->
+            <div class="gtm-summary" id="gtm-summary">
+              <p class="gtm-placeholder">Click "Generate Report" to load the weekly GTM report for sales</p>
+            </div>
+
+            <!-- Three-Column Breakdown -->
+            <div class="gtm-breakdown" id="gtm-breakdown">
+              <div class="gtm-column" id="gtm-by-state">
+                <h4>By Territory</h4>
+                <p class="gtm-placeholder-small">—</p>
+              </div>
+              <div class="gtm-column" id="gtm-by-type">
+                <h4>By Content Type</h4>
+                <p class="gtm-placeholder-small">—</p>
+              </div>
+              <div class="gtm-column" id="gtm-by-topic">
+                <h4>Top Topics</h4>
+                <p class="gtm-placeholder-small">—</p>
+              </div>
+            </div>
+
+            <!-- Customer Stories Showcase -->
+            <div class="gtm-customer-stories" id="gtm-customer-stories">
+              <div class="gtm-stories-header">
+                <h4>🌟 Customer Stories This Week</h4>
+              </div>
+              <p class="gtm-placeholder">Generate the report to see customer stories</p>
+            </div>
+
+            <!-- AI Sales Insights -->
+            <div class="gtm-insights" id="gtm-insights">
+              <div class="gtm-insights-header">
+                <h4>🤖 Sales Relevance Insights</h4>
+                <button class="btn btn-sm btn-ghost" onclick="regenerateGTMInsights(event)">
+                  Refresh Insights
+                </button>
+              </div>
+              <div class="gtm-insights-content" id="gtm-insights-content">
+                <p class="gtm-placeholder">AI-generated insights for the sales team will appear here</p>
+              </div>
+            </div>
+
+            <!-- Content Table -->
+            <div class="gtm-table-wrapper">
+              <h4>Content Released This Week</h4>
+              <table class="gtm-table" id="gtm-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>State</th>
+                    <th>Topics</th>
+                    <th>Link</th>
+                  </tr>
+                </thead>
+                <tbody id="gtm-tbody">
+                  <tr class="empty-row">
+                    <td colspan="6">Generate the report to see content</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Export Actions -->
+            <div class="gtm-actions">
+              <button class="btn btn-ghost" onclick="exportGTMReport()">
+                📥 Export GTM Report (CSV)
+              </button>
+              <button class="btn btn-ghost" onclick="copyGTMInsights()">
+                📋 Copy Insights to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="reports-summary" id="reports-summary">
           <!-- Summary stats appear here -->
         </div>

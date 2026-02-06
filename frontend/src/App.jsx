@@ -3,6 +3,7 @@ import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, Me
 import { supabaseClient } from './services/supabase';
 import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
 import ChatInterface from './components/ChatInterface';
+import RecentSubmissions from './components/RecentSubmissions';
 // Lazy load TerminologyAdmin to prevent cascade failures if terminology tables don't exist
 const TerminologyAdmin = lazy(() => import('./components/TerminologyAdmin'));
 import './App.css';
@@ -1066,6 +1067,9 @@ function App() {
       </header>
 
       <main className="main">
+        {/* Recent Submissions Panel */}
+        <RecentSubmissions />
+
         <div className="search-container">
           {/* Mode Toggle */}
           <div className="search-mode-toggle">

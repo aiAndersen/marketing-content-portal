@@ -1311,3 +1311,643 @@ function deleteContent() {
   closeEditModal();
   openDeleteModal(currentEditId, title);
 }
+
+// ============================================
+// WEEKLY GTM REPORT FUNCTIONALITY
+// ============================================
+
+let gtmReportData = [];
+let gtmInsightsText = '';
+
+/**
+ * Toggle GTM panel collapse state
+ */
+function toggleGTMPanel() {
+  const content = document.getElementById('gtm-content');
+  const chevron = document.querySelector('.gtm-chevron');
+  content.classList.toggle('collapsed');
+  chevron.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+}
+
+/**
+ * Load and render the Weekly GTM Report
+ */
+async function generateGTMReport(event) {
+  if (event) event.stopPropagation();
+
+  const panel = document.getElementById('gtm-content');
+  const summary = document.getElementById('gtm-summary');
+
+  // Show loading state
+  summary.innerHTML = '<div class="gtm-loading"><span class="spinner"></span> Loading last 7 days...</div>';
+  panel.classList.remove('collapsed');
+
+  // Track in Heap
+  if (window.heap) {
+    heap.track('GTM Report Generated');
+  }
+
+  try {
+    // Fetch last 7 days of content
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - 7);
+
+    const { data, error } = await supabaseClient
+      .from('marketing_content')
+      .select('*')
+      .gte('created_at', dateFrom.toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    gtmReportData = data || [];
+
+    // Render all sections
+    renderGTMSummary(gtmReportData);
+    renderGTMByState(gtmReportData);
+    renderGTMByType(gtmReportData);
+    renderGTMByTopic(gtmReportData);
+    renderGTMCustomerStories(gtmReportData);
+    renderGTMTable(gtmReportData);
+
+    // Generate AI insights
+    await generateGTMInsights(gtmReportData);
+
+  } catch (err) {
+    console.error('Failed to generate GTM report:', err);
+    summary.innerHTML = `<div class="gtm-error">Failed to load: ${err.message}</div>`;
+  }
+}
+
+/**
+ * Render summary stats (total, week-over-week change)
+ */
+function renderGTMSummary(data) {
+  const thisWeek = data.length;
+
+  // Calculate last week for comparison
+  const lastWeekStart = new Date();
+  lastWeekStart.setDate(lastWeekStart.getDate() - 14);
+  const lastWeekEnd = new Date();
+  lastWeekEnd.setDate(lastWeekEnd.getDate() - 7);
+
+  // Filter allContentData for last week (if available)
+  const lastWeekData = (allContentData || []).filter(item => {
+    const d = new Date(item.created_at);
+    return d >= lastWeekStart && d < lastWeekEnd;
+  });
+  const lastWeek = lastWeekData.length;
+
+  const change = thisWeek - lastWeek;
+  const changeClass = change >= 0 ? 'positive' : 'negative';
+  const changeIcon = change >= 0 ? '↑' : '↓';
+
+  const customerStories = data.filter(d => d.type === 'Customer Story').length;
+  const videos = data.filter(d => d.type === 'Video' || d.type === 'Video Clip').length;
+  const states = [...new Set(data.map(d => d.state).filter(Boolean))].length;
+
+  document.getElementById('gtm-summary').innerHTML = `
+    <div class="gtm-stat">
+      <div class="gtm-stat-value">${thisWeek}</div>
+      <div class="gtm-stat-label">Content Items</div>
+      <div class="gtm-stat-change ${changeClass}">${changeIcon} ${Math.abs(change)} vs last week</div>
+    </div>
+    <div class="gtm-stat highlight">
+      <div class="gtm-stat-value">${customerStories}</div>
+      <div class="gtm-stat-label">Customer Stories</div>
+    </div>
+    <div class="gtm-stat">
+      <div class="gtm-stat-value">${videos}</div>
+      <div class="gtm-stat-label">Videos & Clips</div>
+    </div>
+    <div class="gtm-stat">
+      <div class="gtm-stat-value">${states}</div>
+      <div class="gtm-stat-label">States Covered</div>
+    </div>
+  `;
+}
+
+/**
+ * Render content breakdown by state/territory
+ */
+function renderGTMByState(data) {
+  const stateCounts = countByKey(data, item => normalizeState(item.state) || 'National');
+  const sorted = sortedEntries(stateCounts);
+
+  if (sorted.length === 0) {
+    document.getElementById('gtm-by-state').innerHTML = `
+      <h4>By Territory</h4>
+      <p class="gtm-empty">No state-specific content this week</p>
+    `;
+    return;
+  }
+
+  document.getElementById('gtm-by-state').innerHTML = `
+    <h4>By Territory</h4>
+    <ul class="gtm-list">
+      ${sorted.map(([state, count]) => `
+        <li>
+          <span class="gtm-list-label">${state}</span>
+          <span class="gtm-list-count">${count}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+}
+
+/**
+ * Render content breakdown by type
+ */
+function renderGTMByType(data) {
+  const typeCounts = countByKey(data, item => item.type);
+  const sorted = sortedEntries(typeCounts);
+
+  if (sorted.length === 0) {
+    document.getElementById('gtm-by-type').innerHTML = `
+      <h4>By Content Type</h4>
+      <p class="gtm-empty">No content this week</p>
+    `;
+    return;
+  }
+
+  document.getElementById('gtm-by-type').innerHTML = `
+    <h4>By Content Type</h4>
+    <ul class="gtm-list">
+      ${sorted.map(([type, count]) => `
+        <li>
+          <span class="gtm-list-label">${type}</span>
+          <span class="gtm-list-count">${count}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+}
+
+/**
+ * Extract and render topics from tags and auto_tags
+ */
+function renderGTMByTopic(data) {
+  const topicCounts = {};
+
+  data.forEach(item => {
+    // Combine tags and auto_tags
+    const allTags = [
+      ...(item.tags?.split(',') || []),
+      ...(item.auto_tags?.split(',') || [])
+    ].map(t => t.trim().toLowerCase()).filter(Boolean);
+
+    // Count unique topics per item (avoid double-counting same tag on same item)
+    [...new Set(allTags)].forEach(tag => {
+      topicCounts[tag] = (topicCounts[tag] || 0) + 1;
+    });
+  });
+
+  const sorted = sortedEntries(topicCounts).slice(0, 10);
+
+  if (sorted.length === 0) {
+    document.getElementById('gtm-by-topic').innerHTML = `
+      <h4>Top Topics</h4>
+      <p class="gtm-empty">No topics identified</p>
+    `;
+    return;
+  }
+
+  document.getElementById('gtm-by-topic').innerHTML = `
+    <h4>Top Topics</h4>
+    <ul class="gtm-list">
+      ${sorted.map(([topic, count]) => `
+        <li>
+          <span class="gtm-list-label">${topic}</span>
+          <span class="gtm-list-count">${count}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+}
+
+/**
+ * Render Customer Stories showcase with thumbnails
+ */
+function renderGTMCustomerStories(data) {
+  const container = document.getElementById('gtm-customer-stories');
+  if (!container) return;
+
+  const customerStories = data.filter(d => d.type === 'Customer Story');
+
+  if (customerStories.length === 0) {
+    container.innerHTML = `
+      <div class="gtm-stories-header">
+        <h4>🌟 Customer Stories This Week</h4>
+      </div>
+      <p class="gtm-empty">No new customer stories this week</p>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="gtm-stories-header">
+      <h4>🌟 Customer Stories This Week</h4>
+      <span class="gtm-stories-count">${customerStories.length} ${customerStories.length === 1 ? 'story' : 'stories'}</span>
+    </div>
+    <div class="gtm-stories-grid">
+      ${customerStories.map(story => {
+        const state = story.state || 'National';
+        const summary = story.summary ? truncateSummary(story.summary, 180) : 'Customer success story highlighting SchooLinks impact.';
+        const gradientIndex = Math.abs(hashCode(story.title)) % 5;
+
+        return `
+          <div class="gtm-story-card" data-url="${story.live_link || ''}">
+            <div class="gtm-story-thumbnail gradient-${gradientIndex}" id="thumb-${story.id}">
+              <span class="gtm-story-type-badge">Customer Story</span>
+              <span class="gtm-story-state">${state}</span>
+            </div>
+            <div class="gtm-story-content">
+              <h5 class="gtm-story-title">${story.title}</h5>
+              <p class="gtm-story-summary">${summary}</p>
+              <div class="gtm-story-actions">
+                ${story.live_link ? `<a href="${story.live_link}" target="_blank" class="gtm-story-link">Read More</a>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  // Fetch OG images for each story (async, won't block render)
+  customerStories.forEach(story => {
+    if (story.live_link) {
+      fetchOGImage(story.live_link, story.id);
+    }
+  });
+}
+
+/**
+ * Fetch Open Graph image from a URL and update the thumbnail
+ */
+async function fetchOGImage(url, storyId) {
+  try {
+    // Use allorigins.win as a CORS proxy to fetch the page HTML
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl, { timeout: 5000 });
+
+    if (!response.ok) return;
+
+    const html = await response.text();
+
+    // Extract og:image from the HTML
+    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+
+    if (ogImageMatch && ogImageMatch[1]) {
+      const imageUrl = ogImageMatch[1];
+      const thumbEl = document.getElementById(`thumb-${storyId}`);
+      if (thumbEl) {
+        // Set all background properties - contain to show full image centered
+        thumbEl.style.backgroundImage = `url(${imageUrl})`;
+        thumbEl.style.backgroundSize = 'contain';
+        thumbEl.style.backgroundPosition = 'center center';
+        thumbEl.style.backgroundRepeat = 'no-repeat';
+        thumbEl.classList.add('has-image');
+      }
+    }
+  } catch (err) {
+    // Silently fail - gradient fallback will show
+    console.log(`[GTM] Could not fetch OG image for ${url}:`, err.message);
+  }
+}
+
+/**
+ * Simple hash function for generating consistent gradient indices
+ */
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+}
+
+/**
+ * Truncate summary text with ellipsis
+ */
+function truncateSummary(text, maxLength) {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength).trim() + '...';
+}
+
+/**
+ * Render the content table
+ */
+function renderGTMTable(data) {
+  const tbody = document.getElementById('gtm-tbody');
+
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No content in the last 7 days</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(item => {
+    const date = item.created_at
+      ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : '-';
+    const topics = [item.tags, item.auto_tags].filter(Boolean).join(', ').substring(0, 60);
+    const typeClass = (item.type || '').toLowerCase().replace(/\s+/g, '-');
+
+    return `
+      <tr>
+        <td>${date}</td>
+        <td><span class="type-badge type-${typeClass}">${item.type || '-'}</span></td>
+        <td class="gtm-title-cell">${item.title || '-'}</td>
+        <td>${item.state || 'National'}</td>
+        <td class="gtm-topics-cell" title="${topics}">${topics ? (topics.length > 40 ? topics.substring(0, 40) + '...' : topics) : '-'}</td>
+        <td>
+          ${item.live_link ? `<a href="${item.live_link}" target="_blank" class="gtm-link">View →</a>` : '-'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/**
+ * Generate AI-powered sales relevance insights
+ */
+async function generateGTMInsights(data) {
+  const insightsEl = document.getElementById('gtm-insights-content');
+  insightsEl.innerHTML = '<div class="gtm-loading"><span class="spinner"></span> Generating sales insights...</div>';
+
+  if (data.length === 0) {
+    insightsEl.innerHTML = '<p class="gtm-empty">No content to analyze this week.</p>';
+    return;
+  }
+
+  try {
+    // Build context for AI
+    const context = {
+      total_items: data.length,
+      by_state: countByKey(data, item => normalizeState(item.state) || 'National'),
+      by_type: countByKey(data, item => item.type),
+      customer_stories: data.filter(d => d.type === 'Customer Story').map(d => ({
+        title: d.title,
+        state: d.state,
+        summary: d.summary?.substring(0, 200)
+      })),
+      top_topics: sortedEntries(extractGTMTopics(data)).slice(0, 15),
+      content_list: data.slice(0, 20).map(d => ({
+        type: d.type,
+        title: d.title,
+        state: d.state,
+        tags: d.tags
+      }))
+    };
+
+    const response = await fetch('/api/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.3,
+        max_tokens: 900,
+        messages: [
+          {
+            role: 'system',
+            content: `You are a sales enablement specialist for SchooLinks, a K-12 college and career readiness platform.
+
+Generate a concise Weekly GTM Report summary for the sales team. Focus on:
+
+1. **Territory Highlights** - Which states got new content and why it matters for reps in those regions. Be specific about how content can help close deals.
+
+2. **Customer Story Value** - How new customer stories can be used in sales conversations. Include specific talking points.
+
+3. **Competitive Positioning** - Any content that helps against competitors (Naviance, Xello, PowerSchool, MaiaLearning).
+
+4. **Key Topics** - What themes/subjects are being addressed that resonate with prospects (FAFSA, work-based learning, career exploration, etc.)
+
+5. **Action Items** - 2-3 specific ways sales can use this content THIS WEEK
+
+Be specific, actionable, and concise. Use bullet points. Focus on sales value, not marketing metrics.
+Keep the total response under 400 words.`
+          },
+          {
+            role: 'user',
+            content: `Generate a Weekly GTM Report for the sales team based on this content released in the last 7 days:\n\n${JSON.stringify(context, null, 2)}`
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`API error: ${errText}`);
+    }
+
+    const result = await response.json();
+    gtmInsightsText = result.choices?.[0]?.message?.content || 'No insights generated';
+
+    // Render with markdown-like formatting
+    insightsEl.innerHTML = formatGTMInsights(gtmInsightsText);
+
+  } catch (err) {
+    console.error('Failed to generate insights via /api/openai:', err);
+
+    // Check if we're running locally (npx serve doesn't have /api/openai)
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (isLocal && (err.message.includes('404') || err.message.includes('Failed to fetch') || err.message.includes('API error'))) {
+      // Try direct OpenAI API call as fallback for local development
+      console.log('[GTM Report] Trying direct OpenAI API fallback for local dev...');
+
+      if (typeof LOCAL_DEV_CONFIG !== 'undefined' && LOCAL_DEV_CONFIG.openaiKey) {
+        try {
+          insightsEl.innerHTML = '<div class="loading">Generating insights (local fallback)...</div>';
+
+          const directResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${LOCAL_DEV_CONFIG.openaiKey}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              temperature: 0.3,
+              max_tokens: 900,
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are a sales enablement specialist for SchooLinks, a K-12 college and career readiness platform.
+
+Generate a concise Weekly GTM Report summary for the sales team. Focus on:
+
+1. **Territory Highlights** - Which states got new content and why it matters for reps in those regions. Be specific about how content can help close deals.
+
+2. **Customer Story Value** - How new customer stories can be used in sales conversations. Include specific talking points.
+
+3. **Competitive Positioning** - Any content that helps against competitors (Naviance, Xello, PowerSchool, MaiaLearning).
+
+4. **Key Topics** - What themes/subjects are being addressed that resonate with prospects (FAFSA, work-based learning, career exploration, etc.)
+
+5. **Action Items** - 2-3 specific ways sales can use this content THIS WEEK
+
+Be specific, actionable, and concise. Use bullet points. Focus on sales value, not marketing metrics.
+Keep the total response under 400 words.`
+                },
+                {
+                  role: 'user',
+                  content: `Generate a Weekly GTM Report for the sales team based on this content released in the last 7 days:\n\n${JSON.stringify(context, null, 2)}`
+                }
+              ]
+            })
+          });
+
+          if (!directResponse.ok) {
+            const errData = await directResponse.json().catch(() => ({}));
+            throw new Error(errData.error?.message || `Direct API error: ${directResponse.status}`);
+          }
+
+          const directResult = await directResponse.json();
+          gtmInsightsText = directResult.choices?.[0]?.message?.content || 'No insights generated';
+          insightsEl.innerHTML = formatGTMInsights(gtmInsightsText);
+          console.log('[GTM Report] Successfully generated insights via direct API');
+          return;
+        } catch (directErr) {
+          console.error('Direct OpenAI API fallback failed:', directErr);
+          insightsEl.innerHTML = `<p class="gtm-error">Failed to generate insights: ${directErr.message}</p>`;
+        }
+      } else {
+        insightsEl.innerHTML = `
+          <div class="gtm-error">
+            <strong>AI Insights not available locally</strong>
+            <p>The OpenAI API endpoint requires the Vercel deployment or LOCAL_DEV_CONFIG in config.js.</p>
+            <p><a href="https://content-submission.vercel.app" target="_blank">Open deployed version →</a></p>
+          </div>
+        `;
+      }
+    } else {
+      insightsEl.innerHTML = `<p class="gtm-error">Failed to generate insights: ${err.message}</p>`;
+    }
+  }
+}
+
+/**
+ * Regenerate just the AI insights
+ */
+async function regenerateGTMInsights(event) {
+  if (event) event.stopPropagation();
+
+  if (gtmReportData.length === 0) {
+    alert('Generate the full report first.');
+    return;
+  }
+
+  await generateGTMInsights(gtmReportData);
+}
+
+/**
+ * Format AI insights with basic markdown rendering
+ */
+function formatGTMInsights(text) {
+  return text
+    // Bold text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // Headers
+    .replace(/^### (.*?)$/gm, '<h5>$1</h5>')
+    .replace(/^## (.*?)$/gm, '<h4>$1</h4>')
+    // Bullet points
+    .replace(/^\s*[-•]\s+(.+)$/gm, '<li>$1</li>')
+    // Numbered lists
+    .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
+    // Wrap consecutive <li> in <ul>
+    .replace(/(<li>[\s\S]*?<\/li>)(?=\s*(?:<li>|$))/g, '$1')
+    .replace(/(<li>.*<\/li>)+/gs, '<ul>$&</ul>')
+    // Paragraphs
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<)/, '<p>')
+    .replace(/(?<!>)$/, '</p>')
+    // Clean up empty paragraphs
+    .replace(/<p>\s*<\/p>/g, '')
+    .replace(/<p>\s*<ul>/g, '<ul>')
+    .replace(/<\/ul>\s*<\/p>/g, '</ul>');
+}
+
+/**
+ * Extract topics from data for AI context
+ */
+function extractGTMTopics(data) {
+  const counts = {};
+  data.forEach(item => {
+    const tags = [item.tags, item.auto_tags].filter(Boolean).join(',').split(',');
+    tags.map(t => t.trim().toLowerCase()).filter(Boolean).forEach(tag => {
+      counts[tag] = (counts[tag] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
+/**
+ * Export GTM Report as CSV
+ */
+function exportGTMReport() {
+  if (gtmReportData.length === 0) {
+    alert('No data to export. Generate the report first.');
+    return;
+  }
+
+  // Track in Heap
+  if (window.heap) {
+    heap.track('GTM Report Exported', { count: gtmReportData.length });
+  }
+
+  const headers = ['Date', 'Type', 'Title', 'State', 'Topics', 'Summary', 'Live Link'];
+  const rows = gtmReportData.map(item => [
+    item.created_at ? new Date(item.created_at).toLocaleDateString() : '',
+    item.type || '',
+    item.title || '',
+    item.state || 'National',
+    [item.tags, item.auto_tags].filter(Boolean).join('; '),
+    item.summary || '',
+    item.live_link || ''
+  ]);
+
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+  ].join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `weekly-gtm-report-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Copy insights to clipboard for Slack/email
+ */
+function copyGTMInsights() {
+  if (!gtmInsightsText) {
+    alert('No insights to copy. Generate the report first.');
+    return;
+  }
+
+  // Track in Heap
+  if (window.heap) {
+    heap.track('GTM Insights Copied');
+  }
+
+  navigator.clipboard.writeText(gtmInsightsText).then(() => {
+    alert('Insights copied to clipboard! Ready to paste in Slack or email.');
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    // Fallback for older browsers
+    const textarea = document.createElement('textarea');
+    textarea.value = gtmInsightsText;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    alert('Insights copied to clipboard!');
+  });
+}
