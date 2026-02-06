@@ -90,6 +90,7 @@ RULES:
 10. Clean up titles - proper capitalization, make them engaging
 11. Infer content type from context (case study = Customer Story, whitepaper = Ebook, etc.)
 12. Always spell the brand name as "SchooLinks" (capital S and L, no space)
+13. NEVER include meta-commentary in any field - no "not available", "could not be determined", "due to unavailability", etc. Only output actual content facts.
 
 TAGGING GUIDELINES (CRITICAL):
 - DO NOT include "SchooLinks" or brand variations as tags (redundant - all content is SchooLinks)
@@ -118,13 +119,14 @@ STATE DETECTION (CRITICAL - Do not default to National if a district is mentione
 - If a numbered district is mentioned (e.g., "District 155"), research or infer the state
 - NEVER default to "National" if ANY district, city, or school name is mentioned
 
-SUMMARY GENERATION (for Customer Stories especially):
-- Generate COMPREHENSIVE summaries (3-5 sentences minimum)
-- Include specific details: district name, student count, outcomes achieved
-- Mention specific SchooLinks features used (KRI, WBL, PLP, etc.)
-- Include quantifiable results if mentioned (%, numbers, improvements)
-- Capture the "story" - what problem was solved, what was the journey
-- Example: "Community High School District 155 in Crystal Lake, Illinois partnered with SchooLinks to scale their work-based learning program. The district implemented SchooLinks' WBL module to manage internship placements, track student hours, and connect with local industry partners. Since implementation, they've increased student WBL participation by X% and streamlined coordinator workflows."
+SUMMARY GENERATION:
+- Generate clear, factual summaries (2-4 sentences)
+- Include: district/organization name, what they did with SchooLinks, key benefits
+- Mention specific features if clear from content (WBL, KRI, PLP, etc.)
+- CRITICAL: Only include information actually present in the content
+- NEVER add meta-commentary like "metrics not available", "outcomes not found", "due to page unavailability"
+- NEVER explain what information is missing - just omit it
+- Example: "Community High School District 155 in Illinois partnered with SchooLinks to scale their work-based learning program, implementing the WBL module to manage internship placements and track student hours."
 
 Return ONLY valid JSON in this exact format:
 {
@@ -846,24 +848,23 @@ async function parseWithAI(userInput) {
 
         const webpageContent = await fetchWebpageContent(url);
         if (webpageContent) {
-          extractedContexts.push(`Webpage Content (use this for summary, tags, and state detection):\n${truncateText(webpageContent, 15000)}`);
-          extractedContexts.push(`IMPORTANT: Generate a COMPREHENSIVE summary (3-5 sentences) based on the webpage content above. Include specific details like district name, outcomes, metrics, and features used.`);
-          extractedContexts.push(`IMPORTANT: Carefully analyze the content to identify the state/region. Look for district names, city names, or state references. Many district names indicate specific states (e.g., "District 155" is in Illinois, "Austin ISD" is in Texas).`);
+          extractedContexts.push(`Webpage Content:\n${truncateText(webpageContent, 15000)}`);
+          extractedContexts.push(`Generate a clear, factual summary (2-4 sentences) based on the content above. Include district name and what they achieved with SchooLinks. Only include facts present - never mention missing information.`);
+          extractedContexts.push(`Identify the state from district names or city references. District 155 = IL, Austin ISD = TX, etc.`);
 
           // Try to detect state from content
           const detectedState = detectStateFromContent(webpageContent);
           if (detectedState) {
-            extractedContexts.push(`STATE HINT: Based on district name detection, this content appears to be from ${detectedState}. Set state to "${detectedState}".`);
+            extractedContexts.push(`Set state to "${detectedState}".`);
           } else if (urlStateHint) {
-            extractedContexts.push(`STATE HINT: Based on URL analysis, this content appears to be from ${urlStateHint}. Set state to "${urlStateHint}".`);
+            extractedContexts.push(`Set state to "${urlStateHint}".`);
           }
         } else {
-          // Webpage fetch failed - provide hints from URL
-          extractedContexts.push(`IMPORTANT: Could not fetch webpage content directly. Analyze the URL for context.`);
+          // Webpage fetch failed - generate from URL
+          extractedContexts.push(`Generate summary from the URL path and title. Focus on district name and topic.`);
           if (urlStateHint) {
-            extractedContexts.push(`STATE HINT: The URL contains "district-155" which refers to Community High School District 155 in Crystal Lake, Illinois. Set state to "IL".`);
+            extractedContexts.push(`Set state to "IL" (District 155 is in Crystal Lake, Illinois).`);
           }
-          extractedContexts.push(`URL Analysis: "${url}" - Extract district name, topic, and any other details from the URL path.`);
         }
       } else {
         urlContexts.push(`[URL: ${url}]`);
