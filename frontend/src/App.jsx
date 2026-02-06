@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, MessageSquare, ChevronDown, Brain, ArrowLeft } from 'lucide-react';
+import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, MessageSquare, ChevronDown, Brain, ArrowLeft, BarChart3 } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
 import ChatInterface from './components/ChatInterface';
 import RecentSubmissions from './components/RecentSubmissions';
+import WeeklyGTMReport from './components/WeeklyGTMReport';
 // Lazy load TerminologyAdmin to prevent cascade failures if terminology tables don't exist
 const TerminologyAdmin = lazy(() => import('./components/TerminologyAdmin'));
 import './App.css';
@@ -23,7 +24,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [isViewAll, setIsViewAll] = useState(false);
-  const [isChatMode, setIsChatMode] = useState(true); // Default to chat mode
+  const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'search' | 'gtm'
   const [conversationHistory, setConversationHistory] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [showResultsHint, setShowResultsHint] = useState(false);
@@ -1074,9 +1075,9 @@ function App() {
           {/* Mode Toggle */}
           <div className="search-mode-toggle">
             <button
-              className={`search-mode-btn ${isChatMode ? 'active' : ''}`}
+              className={`search-mode-btn ${viewMode === 'chat' ? 'active' : ''}`}
               onClick={() => {
-                setIsChatMode(true);
+                setViewMode('chat');
                 if (window.heap) window.heap.track('Mode Toggled', { mode: 'chat' });
               }}
             >
@@ -1084,19 +1085,29 @@ function App() {
               Chat Assistant
             </button>
             <button
-              className={`search-mode-btn ${!isChatMode ? 'active' : ''}`}
+              className={`search-mode-btn ${viewMode === 'search' ? 'active' : ''}`}
               onClick={() => {
-                setIsChatMode(false);
+                setViewMode('search');
                 if (window.heap) window.heap.track('Mode Toggled', { mode: 'search' });
               }}
             >
               <Search size={16} />
               Quick Search
             </button>
+            <button
+              className={`search-mode-btn ${viewMode === 'gtm' ? 'active' : ''}`}
+              onClick={() => {
+                setViewMode('gtm');
+                if (window.heap) window.heap.track('Mode Toggled', { mode: 'gtm' });
+              }}
+            >
+              <BarChart3 size={16} />
+              Weekly GTM Report
+            </button>
           </div>
 
           {/* Chat Interface */}
-          {isChatMode && (
+          {viewMode === 'chat' && (
             <ChatInterface
               conversationHistory={conversationHistory}
               onSendMessage={handleChatMessage}
@@ -1108,7 +1119,7 @@ function App() {
           )}
 
           {/* Results hint alert - shows after chat recommendations */}
-          {isChatMode && showResultsHint && results.length > 0 && (
+          {viewMode === 'chat' && showResultsHint && results.length > 0 && (
             <div
               className="results-hint"
               onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -1120,7 +1131,7 @@ function App() {
           )}
 
           {/* Traditional Search Form */}
-          {!isChatMode && (
+          {viewMode === 'search' && (
           <form onSubmit={handleSearch} className="search-form">
             <div className="search-input-wrapper">
               <Search className="search-icon" size={20} />
@@ -1147,7 +1158,7 @@ function App() {
           )}
 
           {/* AI Insight Display - only in search mode */}
-          {!isChatMode && aiInsight && (
+          {viewMode === 'search' && aiInsight && (
             <div className="ai-insight">
               <div className="ai-insight-header">
                 <Sparkles size={16} />
@@ -1236,7 +1247,7 @@ function App() {
           )}
 
           {/* Filters - only in search mode */}
-          {!isChatMode && (
+          {viewMode === 'search' && (
           <div className={`filters ${filtersOpen ? 'is-open' : 'is-collapsed'}`}>
             <div className="filters-header">
               <button
@@ -1296,6 +1307,11 @@ function App() {
           </div>
           )}
 
+          {/* Weekly GTM Report */}
+          {viewMode === 'gtm' && (
+            <WeeklyGTMReport />
+          )}
+
           {error && (
             <div className="error">
               <p>Error: {error}</p>
@@ -1303,6 +1319,8 @@ function App() {
           )}
         </div>
 
+        {/* Results - hide when in GTM mode */}
+        {viewMode !== 'gtm' && (
         <div className="results-container" ref={resultsRef}>
           <div className="results-header">
             <h2>
@@ -1408,6 +1426,7 @@ function App() {
             </div>
           )}
         </div>
+        )}
       </main>
     </div>
   );

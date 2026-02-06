@@ -1351,6 +1351,7 @@ async function generateGTMReport(event) {
     // Fetch last 7 days of content
     const dateFrom = new Date();
     dateFrom.setDate(dateFrom.getDate() - 7);
+    const dateTo = new Date();
 
     const { data, error } = await supabaseClient
       .from('marketing_content')
@@ -1361,6 +1362,9 @@ async function generateGTMReport(event) {
     if (error) throw error;
 
     gtmReportData = data || [];
+
+    // Update report header with dates
+    updateGTMReportHeader(dateFrom, dateTo);
 
     // Render all sections
     renderGTMSummary(gtmReportData);
@@ -1376,6 +1380,39 @@ async function generateGTMReport(event) {
   } catch (err) {
     console.error('Failed to generate GTM report:', err);
     summary.innerHTML = `<div class="gtm-error">Failed to load: ${err.message}</div>`;
+  }
+}
+
+/**
+ * Update the report header with date range and generation time
+ */
+function updateGTMReportHeader(dateFrom, dateTo) {
+  const dateRangeEl = document.getElementById('gtm-date-range');
+  const generatedAtEl = document.getElementById('gtm-generated-at');
+  const footerDateEl = document.getElementById('gtm-footer-date');
+
+  const formatDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatTime = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  if (dateRangeEl) {
+    dateRangeEl.innerHTML = `
+      <span class="gtm-date-label">Report Period</span>
+      <span class="gtm-date-value">${formatDate(dateFrom)} – ${formatDate(dateTo)}</span>
+    `;
+  }
+
+  if (generatedAtEl) {
+    const now = new Date();
+    generatedAtEl.innerHTML = `
+      <span class="gtm-date-label">Generated</span>
+      <span class="gtm-date-value">${formatDate(now)} at ${formatTime(now)}</span>
+    `;
+  }
+
+  if (footerDateEl) {
+    footerDateEl.textContent = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+    });
   }
 }
 
@@ -1432,18 +1469,17 @@ function renderGTMSummary(data) {
  */
 function renderGTMByState(data) {
   const stateCounts = countByKey(data, item => normalizeState(item.state) || 'National');
-  const sorted = sortedEntries(stateCounts);
+  const sorted = sortedEntries(stateCounts).slice(0, 8); // Limit for presentation
+
+  const container = document.getElementById('gtm-by-state');
+  if (!container) return;
 
   if (sorted.length === 0) {
-    document.getElementById('gtm-by-state').innerHTML = `
-      <h4>By Territory</h4>
-      <p class="gtm-empty">No state-specific content this week</p>
-    `;
+    container.innerHTML = `<p class="gtm-empty">No state-specific content this week</p>`;
     return;
   }
 
-  document.getElementById('gtm-by-state').innerHTML = `
-    <h4>By Territory</h4>
+  container.innerHTML = `
     <ul class="gtm-list">
       ${sorted.map(([state, count]) => `
         <li>
@@ -1460,18 +1496,17 @@ function renderGTMByState(data) {
  */
 function renderGTMByType(data) {
   const typeCounts = countByKey(data, item => item.type);
-  const sorted = sortedEntries(typeCounts);
+  const sorted = sortedEntries(typeCounts).slice(0, 8); // Limit for presentation
+
+  const container = document.getElementById('gtm-by-type');
+  if (!container) return;
 
   if (sorted.length === 0) {
-    document.getElementById('gtm-by-type').innerHTML = `
-      <h4>By Content Type</h4>
-      <p class="gtm-empty">No content this week</p>
-    `;
+    container.innerHTML = `<p class="gtm-empty">No content this week</p>`;
     return;
   }
 
-  document.getElementById('gtm-by-type').innerHTML = `
-    <h4>By Content Type</h4>
+  container.innerHTML = `
     <ul class="gtm-list">
       ${sorted.map(([type, count]) => `
         <li>
@@ -1502,18 +1537,17 @@ function renderGTMByTopic(data) {
     });
   });
 
-  const sorted = sortedEntries(topicCounts).slice(0, 10);
+  const sorted = sortedEntries(topicCounts).slice(0, 8); // Limit for presentation
+
+  const container = document.getElementById('gtm-by-topic');
+  if (!container) return;
 
   if (sorted.length === 0) {
-    document.getElementById('gtm-by-topic').innerHTML = `
-      <h4>Top Topics</h4>
-      <p class="gtm-empty">No topics identified</p>
-    `;
+    container.innerHTML = `<p class="gtm-empty">No topics identified</p>`;
     return;
   }
 
-  document.getElementById('gtm-by-topic').innerHTML = `
-    <h4>Top Topics</h4>
+  container.innerHTML = `
     <ul class="gtm-list">
       ${sorted.map(([topic, count]) => `
         <li>
@@ -1529,50 +1563,44 @@ function renderGTMByTopic(data) {
  * Render Customer Stories showcase with thumbnails
  */
 function renderGTMCustomerStories(data) {
-  const container = document.getElementById('gtm-customer-stories');
-  if (!container) return;
+  const gridContainer = document.getElementById('gtm-stories-grid');
+  const badgeEl = document.getElementById('gtm-stories-badge');
 
   const customerStories = data.filter(d => d.type === 'Customer Story');
 
+  // Update badge count
+  if (badgeEl) {
+    badgeEl.textContent = customerStories.length;
+  }
+
+  if (!gridContainer) return;
+
   if (customerStories.length === 0) {
-    container.innerHTML = `
-      <div class="gtm-stories-header">
-        <h4>🌟 Customer Stories This Week</h4>
-      </div>
-      <p class="gtm-empty">No new customer stories this week</p>
-    `;
+    gridContainer.innerHTML = `<p class="gtm-empty">No new customer stories this week</p>`;
     return;
   }
 
-  container.innerHTML = `
-    <div class="gtm-stories-header">
-      <h4>🌟 Customer Stories This Week</h4>
-      <span class="gtm-stories-count">${customerStories.length} ${customerStories.length === 1 ? 'story' : 'stories'}</span>
-    </div>
-    <div class="gtm-stories-grid">
-      ${customerStories.map(story => {
-        const state = story.state || 'National';
-        const summary = story.summary ? truncateSummary(story.summary, 180) : 'Customer success story highlighting SchooLinks impact.';
-        const gradientIndex = Math.abs(hashCode(story.title)) % 5;
+  gridContainer.innerHTML = customerStories.map(story => {
+    const state = story.state || 'National';
+    const summary = story.summary ? truncateSummary(story.summary, 140) : 'Customer success story highlighting SchooLinks impact.';
+    const gradientIndex = Math.abs(hashCode(story.title)) % 5;
 
-        return `
-          <div class="gtm-story-card" data-url="${story.live_link || ''}">
-            <div class="gtm-story-thumbnail gradient-${gradientIndex}" id="thumb-${story.id}">
-              <span class="gtm-story-type-badge">Customer Story</span>
-              <span class="gtm-story-state">${state}</span>
-            </div>
-            <div class="gtm-story-content">
-              <h5 class="gtm-story-title">${story.title}</h5>
-              <p class="gtm-story-summary">${summary}</p>
-              <div class="gtm-story-actions">
-                ${story.live_link ? `<a href="${story.live_link}" target="_blank" class="gtm-story-link">Read More</a>` : ''}
-              </div>
-            </div>
+    return `
+      <div class="gtm-story-card" data-url="${story.live_link || ''}">
+        <div class="gtm-story-thumbnail gradient-${gradientIndex}" id="thumb-${story.id}">
+          <span class="gtm-story-type-badge">Customer Story</span>
+          <span class="gtm-story-state">${state}</span>
+        </div>
+        <div class="gtm-story-content">
+          <h5 class="gtm-story-title">${story.title}</h5>
+          <p class="gtm-story-summary">${summary}</p>
+          <div class="gtm-story-actions">
+            ${story.live_link ? `<a href="${story.live_link}" target="_blank" class="gtm-story-link">Read Story →</a>` : ''}
           </div>
-        `;
-      }).join('')}
-    </div>
-  `;
+        </div>
+      </div>
+    `;
+  }).join('');
 
   // Fetch OG images for each story (async, won't block render)
   customerStories.forEach(story => {
@@ -1586,35 +1614,84 @@ function renderGTMCustomerStories(data) {
  * Fetch Open Graph image from a URL and update the thumbnail
  */
 async function fetchOGImage(url, storyId) {
-  try {
-    // Use allorigins.win as a CORS proxy to fetch the page HTML
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl, { timeout: 5000 });
+  if (!url) return;
 
-    if (!response.ok) return;
+  console.log(`[GTM] Fetching OG image for story ${storyId}: ${url}`);
 
-    const html = await response.text();
+  // Try multiple CORS proxies in case one fails
+  const proxies = [
+    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+  ];
 
-    // Extract og:image from the HTML
-    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
-                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+  for (let i = 0; i < proxies.length; i++) {
+    try {
+      const proxyUrl = proxies[i](url);
+      console.log(`[GTM] Trying proxy ${i + 1} for ${storyId}`);
 
-    if (ogImageMatch && ogImageMatch[1]) {
-      const imageUrl = ogImageMatch[1];
-      const thumbEl = document.getElementById(`thumb-${storyId}`);
-      if (thumbEl) {
-        // Set all background properties - contain to show full image centered
-        thumbEl.style.backgroundImage = `url(${imageUrl})`;
-        thumbEl.style.backgroundSize = 'contain';
-        thumbEl.style.backgroundPosition = 'center center';
-        thumbEl.style.backgroundRepeat = 'no-repeat';
-        thumbEl.classList.add('has-image');
+      const response = await fetch(proxyUrl, {
+        signal: AbortSignal.timeout(8000)
+      });
+
+      if (!response.ok) {
+        console.log(`[GTM] Proxy ${i + 1} returned status ${response.status} for ${storyId}`);
+        continue;
       }
+
+      const html = await response.text();
+      console.log(`[GTM] Got HTML (${html.length} chars) for ${storyId}`);
+
+      // Try multiple patterns to extract the image
+      const patterns = [
+        // Standard og:image with property first
+        /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
+        // og:image with content first
+        /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i,
+        // Twitter card image
+        /<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i,
+        /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i,
+        // og:image:url variant
+        /<meta[^>]*property=["']og:image:url["'][^>]*content=["']([^"']+)["']/i,
+        // Facebook specific
+        /<meta[^>]*property=["']fb:image["'][^>]*content=["']([^"']+)["']/i,
+        // Generic image_src link
+        /<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["']/i
+      ];
+
+      let imageUrl = null;
+      for (const pattern of patterns) {
+        const match = html.match(pattern);
+        if (match && match[1]) {
+          imageUrl = match[1];
+          console.log(`[GTM] Found image for ${storyId}:`, imageUrl.substring(0, 80) + '...');
+          break;
+        }
+      }
+
+      if (imageUrl) {
+        const thumbEl = document.getElementById(`thumb-${storyId}`);
+        if (thumbEl) {
+          // Set all background properties - contain to show full image centered
+          thumbEl.style.backgroundImage = `url(${imageUrl})`;
+          thumbEl.style.backgroundSize = 'contain';
+          thumbEl.style.backgroundPosition = 'center center';
+          thumbEl.style.backgroundRepeat = 'no-repeat';
+          thumbEl.classList.add('has-image');
+          console.log(`[GTM] Successfully set image for ${storyId}`);
+        }
+        return; // Success - exit
+      } else {
+        console.log(`[GTM] No OG image found in HTML for ${storyId}`);
+      }
+
+    } catch (err) {
+      console.log(`[GTM] Proxy ${i + 1} failed for ${storyId}:`, err.message);
+      // Continue to next proxy
     }
-  } catch (err) {
-    // Silently fail - gradient fallback will show
-    console.log(`[GTM] Could not fetch OG image for ${url}:`, err.message);
   }
+
+  console.log(`[GTM] All proxies failed for ${storyId}, showing gradient fallback`);
 }
 
 /**
@@ -1642,9 +1719,17 @@ function truncateSummary(text, maxLength) {
  */
 function renderGTMTable(data) {
   const tbody = document.getElementById('gtm-tbody');
+  const countEl = document.getElementById('gtm-table-count');
+
+  // Update the count badge
+  if (countEl) {
+    countEl.textContent = `(${data.length} items)`;
+  }
+
+  if (!tbody) return;
 
   if (data.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No content in the last 7 days</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No content in the last 7 days</td></tr>';
     return;
   }
 
@@ -1652,7 +1737,6 @@ function renderGTMTable(data) {
     const date = item.created_at
       ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       : '-';
-    const topics = [item.tags, item.auto_tags].filter(Boolean).join(', ').substring(0, 60);
     const typeClass = (item.type || '').toLowerCase().replace(/\s+/g, '-');
 
     return `
@@ -1661,7 +1745,6 @@ function renderGTMTable(data) {
         <td><span class="type-badge type-${typeClass}">${item.type || '-'}</span></td>
         <td class="gtm-title-cell">${item.title || '-'}</td>
         <td>${item.state || 'National'}</td>
-        <td class="gtm-topics-cell" title="${topics}">${topics ? (topics.length > 40 ? topics.substring(0, 40) + '...' : topics) : '-'}</td>
         <td>
           ${item.live_link ? `<a href="${item.live_link}" target="_blank" class="gtm-link">View →</a>` : '-'}
         </td>
@@ -1682,9 +1765,8 @@ async function generateGTMInsights(data) {
     return;
   }
 
-  try {
-    // Build context for AI
-    const context = {
+  // Build context for AI - defined outside try block so it's accessible in catch fallback
+  const context = {
       total_items: data.length,
       by_state: countByKey(data, item => normalizeState(item.state) || 'National'),
       by_type: countByKey(data, item => item.type),
@@ -1702,6 +1784,7 @@ async function generateGTMInsights(data) {
       }))
     };
 
+  try {
     const response = await fetch('/api/openai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
