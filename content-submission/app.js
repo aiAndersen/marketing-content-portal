@@ -36,12 +36,14 @@ form.addEventListener('submit', async (e) => {
       // Note: created_at is auto-populated by database on insert
     };
 
-    // Insert into Supabase
-    const { error } = await supabaseClient
-      .from('marketing_content')
-      .insert([data]);
-
-    if (error) throw error;
+    // Insert via server-side proxy (service_role key stays server-side)
+    const response = await fetch('/api/supabase-write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'insert', table: 'marketing_content', data })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Insert failed');
 
     // Track content submission in Heap
     if (window.heap) {
@@ -1237,12 +1239,13 @@ async function saveContentEdit(event) {
   };
 
   try {
-    const { error } = await supabaseClient
-      .from('marketing_content')
-      .update(data)
-      .eq('id', currentEditId);
-
-    if (error) throw error;
+    const response = await fetch('/api/supabase-write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'update', table: 'marketing_content', data, match: { id: currentEditId } })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Update failed');
 
     // Track content edit in Heap
     if (window.heap) {
@@ -1279,12 +1282,13 @@ async function confirmDelete() {
   if (!currentEditId) return;
 
   try {
-    const { error } = await supabaseClient
-      .from('marketing_content')
-      .delete()
-      .eq('id', currentEditId);
-
-    if (error) throw error;
+    const response = await fetch('/api/supabase-write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'delete', table: 'marketing_content', match: { id: currentEditId } })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Delete failed');
 
     // Track content deletion in Heap
     if (window.heap) {

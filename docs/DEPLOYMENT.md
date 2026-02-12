@@ -221,11 +221,21 @@ Your site will be live at: `https://marketing-content-portal.vercel.app`
 2. Select your project
 3. Go to "Settings" → "Environment Variables"
 4. Add each variable:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - `VITE_ANTHROPIC_API_KEY` (or `VITE_OPENAI_API_KEY`)
+   - `VITE_SUPABASE_URL` - Supabase project URL (public)
+   - `VITE_SUPABASE_ANON_KEY` - Supabase anonymous key (public)
+   - `SUPABASE_SERVICE_KEY` - Supabase service role key (**server-side only**, required for write operations)
+   - `SUPABASE_URL` - Supabase project URL (for serverless functions)
+   - `OPENAI_API_KEY` - OpenAI API key (server-side only)
+   - `VITE_ANTHROPIC_API_KEY` (or `VITE_OPENAI_API_KEY`) - for frontend AI search
 5. Click "Save"
 6. Redeploy: `vercel --prod`
+
+**Important:** Both Vercel projects (frontend and content-submission) need `SUPABASE_SERVICE_KEY` and `SUPABASE_URL` set. You can also add env vars via CLI:
+```bash
+echo "your-service-role-key" | vercel env add SUPABASE_SERVICE_KEY production
+echo "your-service-role-key" | vercel env add SUPABASE_SERVICE_KEY preview
+echo "your-service-role-key" | vercel env add SUPABASE_SERVICE_KEY development
+```
 
 ---
 
@@ -294,33 +304,54 @@ See `scripts/google_apps_script.js` for details.
 
 ---
 
-## Part 5: User Access & Sharing
+## Part 5: Security & Access
+
+### Database Security (RLS)
+
+Row Level Security is enabled on all tables. The portal uses **anonymous access** (no login required) with the following posture:
+
+- **Read access**: Public for all marketing content, views, and AI context
+- **Write access**: Restricted to `service_role` key (used server-side only in Vercel serverless functions)
+- **Python scripts**: Use `DATABASE_URL` (direct PostgreSQL), which bypasses RLS entirely
+
+All write operations from the browser (content submission, webhooks) are routed through Vercel serverless proxies that use the `SUPABASE_SERVICE_KEY`:
+
+| Proxy | Project | Purpose |
+|-------|---------|---------|
+| `/api/supabase-write` | content-submission | INSERT/UPDATE/DELETE on `marketing_content` |
+| `/api/webflow-webhook` | frontend | Webflow CMS sync |
+
+See [SECURITY.md](../SECURITY.md) for the full RLS policy matrix.
+
+### Run Security Migration
+
+If deploying from scratch, run the security migration after `schema.sql`:
+
+```bash
+# Via Supabase SQL Editor: paste contents of supabase/migrations/20260211_security_fixes.sql
+# Or via psycopg2 if you have DATABASE_URL:
+python -c "
+import psycopg2
+conn = psycopg2.connect('your-database-url')
+conn.autocommit = True
+with open('supabase/migrations/20260211_security_fixes.sql') as f:
+    conn.cursor().execute(f.read())
+conn.close()
+"
+```
 
 ### Share with Your Team
 
-Simply share the Vercel URL:
+Simply share the Vercel URL — no login required:
 ```
 https://marketing-content-portal.vercel.app
 ```
 
-No login required! The database is read-only for the public.
-
 ### Add Authentication (Optional)
 
-If you want to restrict access:
-
-1. Enable Supabase Row Level Security:
-
-```sql
-ALTER TABLE marketing_content ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read access"
-  ON marketing_content
-  FOR SELECT
-  USING (true);
-```
-
-2. Use Supabase Auth for login
+If you want to restrict read access in the future:
+1. Apply `backend/auth-migration.sql` to add Supabase Auth
+2. Update RLS policies to require authentication for SELECT
 3. See Supabase docs: https://supabase.com/docs/guides/auth
 
 ---

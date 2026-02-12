@@ -2,7 +2,7 @@
 
 ## Marketing Content Portal & Content Submission Portal
 
-**Last Updated:** January 30, 2026
+**Last Updated:** February 11, 2026
 
 ---
 
@@ -38,8 +38,9 @@ All sensitive credentials are managed through Vercel's environment variable syst
 - `OPENAI_API_KEY` - OpenAI API access (server-side only)
 - `VITE_SUPABASE_URL` - Supabase project URL (public)
 - `VITE_SUPABASE_ANON_KEY` - Supabase anonymous key (public, RLS-protected)
+- `SUPABASE_SERVICE_KEY` - Supabase service role key (server-side only, Vercel env)
 
-**Note:** Supabase anonymous keys are designed to be public. Security is enforced through Row Level Security (RLS) policies on the database.
+**Note:** Supabase anonymous keys are designed to be public. Security is enforced through Row Level Security (RLS) policies on the database. The service role key bypasses RLS and must only be used server-side (Vercel serverless functions).
 
 ---
 
@@ -47,11 +48,17 @@ All sensitive credentials are managed through Vercel's environment variable syst
 
 ### Supabase Row Level Security (RLS)
 
-All database tables are protected with Row Level Security policies:
+All database tables have RLS enabled with appropriate policies:
 
-- Users can only access content they're authorized to view
-- Write operations are restricted to authenticated users
-- Admin operations require elevated privileges
+| Table | SELECT | INSERT/UPDATE/DELETE | Notes |
+|-------|--------|---------------------|-------|
+| `marketing_content` | Public (anon) | `service_role` only | Public marketing data; scripts use `DATABASE_URL` (bypasses RLS) |
+| `ai_context` | Public (anon) | `service_role` only | AI knowledge base; scripts use `DATABASE_URL` |
+| `ai_prompt_logs` | Authenticated only | Public INSERT (logging) | Anonymous users can log search queries |
+| `terminology_map` | Public (active only) | Authenticated only | Admin/script vocabulary mappings |
+| `log_analysis_reports` | Public | Authenticated INSERT, `service_role` UPDATE | Analysis reports from scripts |
+
+**Views** (`content_type_summary`, `content_by_state`, `content_by_platform`) use `security_invoker = true` to respect the caller's RLS policies.
 
 ### No Sensitive Data in Client Code
 

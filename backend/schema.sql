@@ -50,7 +50,7 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql SET search_path = '';
 
 -- Create a trigger to automatically update updated_at
 CREATE TRIGGER update_marketing_content_updated_at 
@@ -104,22 +104,21 @@ BEGIN
     ) @@ plainto_tsquery('english', search_query)
     ORDER BY relevance DESC;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
--- Enable Row Level Security (Optional - uncomment if needed)
--- ALTER TABLE marketing_content ENABLE ROW LEVEL SECURITY;
+-- Enable Row Level Security
+ALTER TABLE marketing_content ENABLE ROW LEVEL SECURITY;
 
--- Create a policy that allows all operations for now (customize as needed)
--- CREATE POLICY "Allow all operations" ON marketing_content FOR ALL USING (true);
+-- Public read access (marketing content is public data)
+CREATE POLICY "Allow public read access" ON marketing_content FOR SELECT USING (true);
 
--- For public read-only access (recommended for marketing portal):
--- ALTER TABLE marketing_content ENABLE ROW LEVEL SECURITY;
--- CREATE POLICY "Allow public read access" ON marketing_content FOR SELECT USING (true);
--- CREATE POLICY "Allow authenticated write" ON marketing_content FOR INSERT, UPDATE, DELETE 
---   USING (auth.role() = 'authenticated');
+-- Only service_role can write (scripts use DATABASE_URL which bypasses RLS)
+CREATE POLICY "Allow service role write access" ON marketing_content
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Create a view for content type breakdown
-CREATE OR REPLACE VIEW content_type_summary AS
+-- Create a view for content type breakdown (security_invoker respects caller's RLS)
+CREATE OR REPLACE VIEW content_type_summary
+WITH (security_invoker = true) AS
 SELECT 
     type,
     COUNT(*) as total_count,
@@ -131,8 +130,9 @@ FROM marketing_content
 GROUP BY type
 ORDER BY total_count DESC;
 
--- Create a view for state-based breakdown
-CREATE OR REPLACE VIEW content_by_state AS
+-- Create a view for state-based breakdown (security_invoker respects caller's RLS)
+CREATE OR REPLACE VIEW content_by_state
+WITH (security_invoker = true) AS
 SELECT 
     state,
     type,
@@ -142,8 +142,9 @@ WHERE state IS NOT NULL AND state != ''
 GROUP BY state, type
 ORDER BY state, count DESC;
 
--- Create a view for platform breakdown
-CREATE OR REPLACE VIEW content_by_platform AS
+-- Create a view for platform breakdown (security_invoker respects caller's RLS)
+CREATE OR REPLACE VIEW content_by_platform
+WITH (security_invoker = true) AS
 SELECT 
     platform,
     type,
@@ -173,7 +174,7 @@ BEGIN
     
     RETURN result;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
 -- Create a function to search by multiple filters
 CREATE OR REPLACE FUNCTION filter_content(
@@ -202,13 +203,14 @@ BEGIN
         )
     ORDER BY updated_at DESC;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
--- Grant necessary permissions
-GRANT ALL ON marketing_content TO anon, authenticated;
-GRANT ALL ON content_type_summary TO anon, authenticated;
-GRANT ALL ON content_by_state TO anon, authenticated;
-GRANT ALL ON content_by_platform TO anon, authenticated;
+-- Grant permissions (read-only for anon, full for authenticated/service_role)
+GRANT SELECT ON marketing_content TO anon, authenticated;
+GRANT ALL ON marketing_content TO service_role;
+GRANT SELECT ON content_type_summary TO anon, authenticated;
+GRANT SELECT ON content_by_state TO anon, authenticated;
+GRANT SELECT ON content_by_platform TO anon, authenticated;
 
 COMMENT ON TABLE marketing_content IS 'Main table storing all marketing content from the portal. Includes customer stories, videos, blogs, ebooks, webinars, press releases, and more.';
 COMMENT ON COLUMN marketing_content.type IS 'Content type: Customer Story, Video, Blog, Ebook, Webinar, 1-Pager, Press Release, Award, Landing Page, Asset, etc.';

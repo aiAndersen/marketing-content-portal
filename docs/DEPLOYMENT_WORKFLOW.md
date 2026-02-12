@@ -125,6 +125,17 @@ Database changes require extra care:
 4. **Verify staging** works with new schema
 5. **Run on production** only after staging verification
 
+### Applied Migrations
+
+| Migration | Date | Description |
+|-----------|------|-------------|
+| `20260202_ai_prompt_logs.sql` | Feb 2 | AI search query logging |
+| `20260205_terminology_map.sql` | Feb 5 | Self-healing search vocabulary |
+| `20260206_log_analysis_reports.sql` | Feb 6 | Query analysis reports |
+| `20260210_popularity_reports.sql` | Feb 10 | Popularity scoring + gap analysis |
+| `20260211_deep_enrichment.sql` | Feb 11 | Weighted keywords (JSONB) |
+| `20260211_security_fixes.sql` | Feb 11 | RLS enablement, view security, function hardening |
+
 ---
 
 ## Environment Variables
@@ -134,6 +145,25 @@ Database changes require extra care:
 - Production: Vercel Dashboard → Project Settings → Environment Variables → Production
 
 **Never commit `.env` files or hardcode secrets.**
+
+### Required Vercel Environment Variables
+
+Both the **frontend** and **content-submission** Vercel projects need:
+
+| Variable | Scope | Description |
+|----------|-------|-------------|
+| `SUPABASE_URL` | Server-side | Supabase project URL (for serverless functions) |
+| `SUPABASE_SERVICE_KEY` | Server-side | Supabase service role key (bypasses RLS, **never expose to client**) |
+| `OPENAI_API_KEY` | Server-side | OpenAI API key for AI features |
+| `VITE_SUPABASE_URL` | Client-side | Supabase project URL (bundled into frontend) |
+| `VITE_SUPABASE_ANON_KEY` | Client-side | Supabase anonymous key (RLS-protected, safe to expose) |
+
+Add via CLI:
+```bash
+echo "value" | vercel env add SUPABASE_SERVICE_KEY production
+echo "value" | vercel env add SUPABASE_SERVICE_KEY preview
+echo "value" | vercel env add SUPABASE_SERVICE_KEY development
+```
 
 ---
 
@@ -173,4 +203,4 @@ vercel logs
 
 ---
 
-*Last Updated: February 2, 2026*
+*Last Updated: February 11, 2026*
