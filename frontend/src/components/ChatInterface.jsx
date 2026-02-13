@@ -166,7 +166,18 @@ function formatResponseText(text) {
  * Renders AI responses in scannable sections: Quick Answer, Key Points, Content, Follow-ups
  */
 function StructuredResponse({ message, onFollowUp, loading, results, contentDatabase }) {
-  const { quick_answer, key_points, recommendations, follow_up_questions } = message;
+  const { quick_answer, key_points, recommendations: rawRecommendations, follow_up_questions } = message;
+
+  // Deduplicate recommendations by normalized title
+  const recommendations = (() => {
+    const seenTitles = new Set();
+    return (rawRecommendations || []).filter(rec => {
+      const norm = (rec.title || '').toLowerCase().trim();
+      if (seenTitles.has(norm)) return false;
+      seenTitles.add(norm);
+      return true;
+    });
+  })();
 
   // Fuzzy title matching for recommendations (same logic as before)
   const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
@@ -506,14 +517,22 @@ function ChatInterface({
                   </div>
 
                   {/* Legacy recommendations rendering */}
-                  {message.recommendations?.length > 0 && (
+                  {(() => {
+                    const seenTitles = new Set();
+                    const uniqueRecs = (message.recommendations || []).filter(rec => {
+                      const norm = (rec.title || '').toLowerCase().trim();
+                      if (seenTitles.has(norm)) return false;
+                      seenTitles.add(norm);
+                      return true;
+                    });
+                    return uniqueRecs.length > 0 ? (
                     <div className="chat-section">
                       <div className="chat-section-title">
                         <FileText size={14} />
-                        Recommended Content ({message.recommendations.length})
+                        Recommended Content ({uniqueRecs.length})
                       </div>
                       <div className="chat-rec-grid">
-                        {message.recommendations.map((rec, idx) => {
+                        {uniqueRecs.map((rec, idx) => {
                           const normalizeForMatch = (str) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^\w\s]/g, '');
                           const recTitleNorm = normalizeForMatch(rec.title);
                           const getKeyWords = (str) => {
@@ -572,7 +591,8 @@ function ChatInterface({
                         })}
                       </div>
                     </div>
-                  )}
+                  ) : null;
+                  })()}
 
                   {/* Legacy follow-up suggestions */}
                   {message.followUpQuestions?.length > 0 && (

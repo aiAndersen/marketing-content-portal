@@ -714,9 +714,12 @@ function App() {
       }
 
       // Apply content type filter if types were detected (includes all variations)
-      if (chatDetectedTypes.length > 0) {
+      // Skip type filter for competitor queries - users want ALL content types when comparing
+      if (chatDetectedTypes.length > 0 && primaryIntent !== 'competitor') {
         console.log('[Chat] Applying type filter with variations:', chatDetectedTypes);
         queryBuilder = queryBuilder.in('type', chatDetectedTypes);
+      } else if (chatDetectedTypes.length > 0 && primaryIntent === 'competitor') {
+        console.log('[Chat] Skipping type filter for competitor query - showing all content types');
       }
 
       // IMPORTANT: Apply state filter FIRST if states were detected
@@ -792,31 +795,33 @@ function App() {
       console.log('[Chat] Competitor detection:', { isXelloSearch, isNavianceSearch, searchTerms });
       const beforeFilterCount = contentForContext.length;
 
+      // Helper: build searchable text from all content fields (tags, summaries, extracted text, keywords)
+      const getSearchableText = (item) => [
+        item.tags, item.auto_tags, item.title,
+        item.enhanced_summary, item.summary, item.extracted_text,
+        typeof item.keywords === 'string' ? item.keywords : JSON.stringify(item.keywords || [])
+      ].filter(Boolean).join(' ').toLowerCase();
+
       if (isXelloSearch && !isNavianceSearch) {
         // STRICT: When searching for Xello, ONLY keep Xello-related content
-        // First, identify all Xello-specific content
         const xelloContent = contentForContext.filter(item => {
-          const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
-          return allText.includes('xello');
+          return getSearchableText(item).includes('xello');
         });
 
-        // If we have Xello content, use ONLY that (no general content mixing in)
         if (xelloContent.length > 0) {
           console.log(`[Chat] Found ${xelloContent.length} Xello-specific items - using ONLY these`);
           contentForContext = xelloContent;
         } else {
           // Fallback: at least exclude Naviance content
           contentForContext = contentForContext.filter(item => {
-            const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
-            return !allText.includes('naviance');
+            return !getSearchableText(item).includes('naviance');
           });
         }
         console.log(`[Chat] Filtered for Xello: ${beforeFilterCount} -> ${contentForContext.length} items`);
       } else if (isNavianceSearch && !isXelloSearch) {
         // STRICT: When searching for Naviance, ONLY keep Naviance-related content
         const navianceContent = contentForContext.filter(item => {
-          const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
-          return allText.includes('naviance');
+          return getSearchableText(item).includes('naviance');
         });
 
         if (navianceContent.length > 0) {
@@ -824,8 +829,7 @@ function App() {
           contentForContext = navianceContent;
         } else {
           contentForContext = contentForContext.filter(item => {
-            const allText = ((item.tags || '') + ' ' + (item.auto_tags || '') + ' ' + (item.title || '')).toLowerCase();
-            return !allText.includes('xello');
+            return !getSearchableText(item).includes('xello');
           });
         }
         console.log(`[Chat] Filtered for Naviance: ${beforeFilterCount} -> ${contentForContext.length} items`);
