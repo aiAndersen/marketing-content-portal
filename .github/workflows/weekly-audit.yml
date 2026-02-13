@@ -1,13 +1,13 @@
-name: Daily Log Analysis
+name: Weekly Content Audit
 
-# Run daily at 6 AM UTC (midnight CST)
+# Run every Monday at 9 AM UTC (3 AM CST)
 on:
   schedule:
-    - cron: '0 6 * * *'
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
 
 jobs:
-  analyze:
+  audit:
     runs-on: ubuntu-latest
 
     steps:
@@ -38,18 +38,18 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Run log analyzer
+      - name: Run content audit
         continue-on-error: true
         run: |
-          python scripts/log_analyzer.py --days 1 --auto-suggest-terms --output /tmp/log_analysis_report.json
+          python scripts/audit_content_tags.py --output /tmp/audit_report.json -v
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Upload report artifact
+      - name: Upload audit report
         uses: actions/upload-artifact@v4
         with:
-          name: log-analysis-report
-          path: /tmp/log_analysis_report.json
-          retention-days: 30
+          name: weekly-audit-report
+          path: /tmp/audit_report.json
+          retention-days: 90
         if: always()

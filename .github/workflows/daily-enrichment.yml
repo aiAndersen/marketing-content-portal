@@ -1,13 +1,22 @@
-name: Daily Log Analysis
+name: Daily Deep Enrichment
 
-# Run daily at 6 AM UTC (midnight CST)
+# Run daily at 7 AM UTC (1 AM CST), after log analysis at 6 AM
 on:
   schedule:
-    - cron: '0 6 * * *'
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max records to process'
+        required: false
+        default: '20'
+      force:
+        description: 'Re-process all content (true/false)'
+        required: false
+        default: 'false'
 
 jobs:
-  analyze:
+  enrich:
     runs-on: ubuntu-latest
 
     steps:
@@ -38,18 +47,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Run log analyzer
+      - name: Run deep enrichment
         continue-on-error: true
         run: |
-          python scripts/log_analyzer.py --days 1 --auto-suggest-terms --output /tmp/log_analysis_report.json
+          ARGS="--limit ${{ github.event.inputs.limit || '20' }} -v"
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          python scripts/enrich_deep.py $ARGS
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-      - name: Upload report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: log-analysis-report
-          path: /tmp/log_analysis_report.json
-          retention-days: 30
-        if: always()

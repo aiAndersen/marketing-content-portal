@@ -221,3 +221,66 @@ For local development, the content submission app falls back to `LOCAL_DEV_CONFI
 - [ ] Brand name displays as "SchooLinks" everywhere
 - [ ] AI queries route to appropriate model
 - [ ] Local dev fallback works with LOCAL_DEV_CONFIG
+
+## Agent Skills
+
+Reusable agent skills for database maintenance and enrichment. Full documentation: https://github.com/aiAndersen/ai-agent-skills
+
+### /audit-db
+**Comprehensive database audit for tagging opportunities**
+```bash
+python scripts/audit_content_tags.py -v --output /tmp/audit_report.json
+```
+Reports: missing tags, missing keywords, missing summaries, unenriched content, state coverage gaps. Uses gpt-5.2 for AI analysis of flagged content sample.
+- Options: `--limit N` (AI sample size), `--dry-run`, `--skip-ai`, `--output FILE`
+- Schedule: Weekly (Monday 9 AM UTC) via `weekly-audit.yml`
+- Cost: ~$0.20/run
+
+### /enrich
+**Deep enrichment pipeline on unenriched content**
+```bash
+python scripts/enrich_deep.py --limit 20 -v
+```
+Extracts text from URLs and uses gpt-5.2 to generate weighted JSONB keywords, enhanced summaries, auto-tags, and quality assessments.
+- Options: `--limit N`, `--force` (re-process all), `--model MODEL`, `--dry-run`
+- Schedule: Daily (7 AM UTC) via `daily-enrichment.yml`
+- Cost: ~$0.04/record, ~$0.80 for 20 records
+
+### /fix-tags
+**Tag hygiene across all content**
+```bash
+python scripts/submission_agent_improver.py --fix-tags --fix-spelling --apply
+python scripts/fix_tag_format.py
+```
+Removes redundant tags, fixes brand misspellings, converts array format tags.
+- Schedule: Daily (8 AM UTC) via `daily-hygiene.yml`
+- Cost: Free (rule-based)
+
+### /analyze-logs
+**Search log analysis for quality issues**
+```bash
+python scripts/log_analyzer.py --days 7 --auto-suggest-terms -v
+```
+Analyzes `ai_prompt_logs` for zero-result queries, terminology gaps, and patterns.
+- Options: `--days N`, `--start DATE`, `--end DATE`, `--dry-run`, `--output FILE`
+- Schedule: Daily (6 AM UTC) via `log-analysis.yml`
+- Cost: ~$0.01/run
+
+### /content-gaps
+**Content gap analysis based on search popularity**
+```bash
+python scripts/query_popularity_report.py --days 30 -v
+```
+Ranks queries by popularity, identifies high-demand topics with low content, generates AI executive summary.
+- Options: `--days N`, `--output FILE`, `--csv FILE`, `--dry-run`
+- Schedule: On-demand
+- Cost: ~$0.50/run
+
+### Automated Schedule
+
+| Time (UTC) | Workflow | Skill | Frequency |
+|------------|----------|-------|-----------|
+| 6 AM | `log-analysis.yml` | `/analyze-logs` | Daily |
+| 7 AM | `daily-enrichment.yml` | `/enrich` | Daily |
+| 8 AM | `daily-hygiene.yml` | `/fix-tags` | Daily |
+| 9 AM Mon | `weekly-audit.yml` | `/audit-db` | Weekly |

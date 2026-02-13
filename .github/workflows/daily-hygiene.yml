@@ -1,13 +1,13 @@
-name: Daily Log Analysis
+name: Daily Content Hygiene
 
-# Run daily at 6 AM UTC (midnight CST)
+# Run daily at 8 AM UTC (2 AM CST)
 on:
   schedule:
-    - cron: '0 6 * * *'
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 jobs:
-  analyze:
+  hygiene:
     runs-on: ubuntu-latest
 
     steps:
@@ -38,18 +38,25 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Run log analyzer
+      - name: Fix redundant tags
         continue-on-error: true
         run: |
-          python scripts/log_analyzer.py --days 1 --auto-suggest-terms --output /tmp/log_analysis_report.json
+          python scripts/submission_agent_improver.py --fix-tags --apply
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Upload report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: log-analysis-report
-          path: /tmp/log_analysis_report.json
-          retention-days: 30
-        if: always()
+      - name: Fix brand spelling
+        continue-on-error: true
+        run: |
+          python scripts/submission_agent_improver.py --fix-spelling --apply
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Fix tag format
+        continue-on-error: true
+        run: |
+          python scripts/fix_tag_format.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
