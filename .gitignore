@@ -30,3 +30,7 @@ Thumbs.db
 
 # Generated config (contains API keys)
 content-submission/config.js
+
+# Google Cloud service account keys (NEVER commit these)
+*-service-account-key.json
+*-service-account*.json

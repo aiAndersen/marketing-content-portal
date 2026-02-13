@@ -35,13 +35,25 @@ CREATE POLICY "Allow public read access"
   ON public.marketing_content FOR SELECT
   USING (true);
 
--- Only service_role can write (scripts use DATABASE_URL which bypasses RLS;
--- Vercel webhooks use service_role key)
+-- Service role has full access (scripts use DATABASE_URL which bypasses RLS)
 CREATE POLICY "Allow service role write access"
   ON public.marketing_content FOR ALL
   TO service_role
   USING (true)
   WITH CHECK (true);
+
+-- Allow anon writes (content submission portal + admin use anon key; app-level auth)
+CREATE POLICY "Allow public insert"
+  ON public.marketing_content FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Allow public update"
+  ON public.marketing_content FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Allow public delete"
+  ON public.marketing_content FOR DELETE
+  USING (true);
 
 -- ============================================
 -- 3. ENABLE RLS ON ai_context
@@ -233,10 +245,9 @@ CREATE POLICY "Allow service role update of log analysis reports"
 -- ============================================
 -- 6. REVOKE EXCESSIVE GRANT STATEMENTS
 -- ============================================
--- marketing_content currently has GRANT ALL TO anon, authenticated.
--- Revoke write permissions from anon (reads are handled by RLS policy).
-
-REVOKE INSERT, UPDATE, DELETE ON public.marketing_content FROM anon;
+-- marketing_content needs INSERT/UPDATE/DELETE for content submission portal
+-- and admin interface. RLS policies control row-level access.
+-- (Previously revoked, but content submission + admin need these.)
 
 -- Views only need SELECT (currently granted ALL)
 REVOKE ALL ON public.content_type_summary FROM anon, authenticated;

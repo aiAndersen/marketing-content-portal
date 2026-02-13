@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, X, Plus, RefreshCw, Brain, TrendingUp, AlertCircle, Search, Sparkles } from 'lucide-react';
+import { Check, X, Plus, RefreshCw, Brain, TrendingUp, AlertCircle, Search, Sparkles, Copy, ChevronDown, ChevronRight, Flag, BarChart3, MapPin } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import {
   getPendingSuggestions,
@@ -33,6 +33,12 @@ function TerminologyAdmin() {
   const [lastAnalysis, setLastAnalysis] = useState(null); // Store last analysis for display
   const [searchFilter, setSearchFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+
+  // Reports dashboard state
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [showAllPopularity, setShowAllPopularity] = useState(false);
+  const [showAllGaps, setShowAllGaps] = useState(false);
+  const [reportSortBy, setReportSortBy] = useState('count'); // 'count' or 'avg_recommendations'
 
   // New mapping form state
   const [newMapping, setNewMapping] = useState({
@@ -862,60 +868,401 @@ Suggest terminology mappings that would improve search quality.`
           </div>
         )}
 
-        {/* Analysis Reports Tab */}
+        {/* Analysis Reports Tab - Enhanced Dashboard */}
         {activeTab === 'reports' && (
           <div className="reports-panel">
-            {analysisReports.length === 0 ? (
-              <div className="empty-state">
-                <AlertCircle size={48} />
-                <h3>No Reports Yet</h3>
-                <p>Run the log analyzer to generate analysis reports:</p>
-                <code>python3 scripts/log_analyzer.py --days 7</code>
-              </div>
-            ) : (
-              <div className="reports-list">
-                {analysisReports.map(report => (
-                  <div key={report.id} className="report-card">
-                    <div className="report-header">
-                      <h4>{new Date(report.analysis_date).toLocaleDateString()}</h4>
-                      <span className="report-meta">
-                        {report.logs_analyzed} queries analyzed
-                      </span>
-                    </div>
-                    <p className="report-summary">{report.summary}</p>
-                    <div className="report-stats">
-                      <div className="report-stat">
-                        <span className="label">Avg Recommendations</span>
-                        <span className="value">{report.avg_recommendations_count || 0}</span>
-                      </div>
-                      <div className="report-stat">
-                        <span className="label">Zero Results</span>
-                        <span className="value">{report.zero_result_queries || 0}</span>
-                      </div>
-                      <div className="report-stat">
-                        <span className="label">Competitor Queries</span>
-                        <span className="value">{report.competitor_query_count || 0}</span>
-                      </div>
-                    </div>
-                    {report.issues_identified && report.issues_identified.length > 0 && (
-                      <div className="report-issues">
-                        <strong>Issues Found:</strong>
-                        <ul>
-                          {report.issues_identified.slice(0, 3).map((issue, idx) => (
-                            <li key={idx}>{issue.issue || issue}</li>
-                          ))}
-                        </ul>
+            {(() => {
+              // Separate comprehensive and standard reports
+              const comprehensiveReports = analysisReports.filter(r => r.report_type === 'comprehensive');
+              const standardReports = analysisReports.filter(r => r.report_type !== 'comprehensive');
+              const activeReport = selectedReport || comprehensiveReports[0] || null;
+
+              // Helper to flag a content gap
+              async function handleFlagGap(reportId, gapIndex) {
+                try {
+                  const report = analysisReports.find(r => r.id === reportId);
+                  if (!report || !report.content_gaps) return;
+                  const updatedGaps = [...report.content_gaps];
+                  updatedGaps[gapIndex] = { ...updatedGaps[gapIndex], flagged: !updatedGaps[gapIndex].flagged };
+                  const { error: updateError } = await supabaseClient
+                    .from('log_analysis_reports')
+                    .update({ content_gaps: updatedGaps })
+                    .eq('id', reportId);
+                  if (!updateError) {
+                    setAnalysisReports(prev => prev.map(r =>
+                      r.id === reportId ? { ...r, content_gaps: updatedGaps } : r
+                    ));
+                    setSuccess('Gap priority updated!');
+                    setTimeout(() => setSuccess(null), 2000);
+                  }
+                } catch (err) {
+                  console.error('Failed to flag gap:', err);
+                }
+              }
+
+              function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                  setSuccess('Copied to clipboard!');
+                  setTimeout(() => setSuccess(null), 2000);
+                }).catch(() => {});
+              }
+
+              return (
+                <>
+                  {/* Report Selector */}
+                  <div className="report-selector">
+                    {comprehensiveReports.length > 0 ? (
+                      <select
+                        className="report-select"
+                        value={activeReport?.id || ''}
+                        onChange={(e) => {
+                          const r = analysisReports.find(rep => rep.id === e.target.value);
+                          setSelectedReport(r);
+                          setShowAllPopularity(false);
+                          setShowAllGaps(false);
+                        }}
+                      >
+                        {comprehensiveReports.map(r => (
+                          <option key={r.id} value={r.id}>
+                            {new Date(r.analysis_date).toLocaleDateString()} - {r.logs_analyzed} queries ({r.report_type})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="empty-state" style={{ padding: '2rem' }}>
+                        <BarChart3 size={48} />
+                        <h3>No Comprehensive Reports Yet</h3>
+                        <p>Run the popularity report to generate analysis:</p>
+                        <code>python3 scripts/query_popularity_report.py --days 30</code>
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+
+                  {activeReport && (
+                    <>
+                      {/* Executive Summary */}
+                      {activeReport.executive_summary && (
+                        <div className="report-executive-summary">
+                          <div className="executive-header">
+                            <h4><Sparkles size={16} /> Executive Summary</h4>
+                            <button
+                              className="btn-copy"
+                              onClick={() => copyToClipboard(activeReport.executive_summary)}
+                              title="Copy to clipboard"
+                            >
+                              <Copy size={14} /> Copy
+                            </button>
+                          </div>
+                          <div
+                            className="executive-text"
+                            dangerouslySetInnerHTML={{ __html: formatMarkdown(activeReport.executive_summary) }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Key Metrics Cards */}
+                      <div className="report-metrics-grid">
+                        <div className="report-metric-card">
+                          <div className="metric-value">{activeReport.logs_analyzed || 0}</div>
+                          <div className="metric-label">Queries Analyzed</div>
+                        </div>
+                        <div className="report-metric-card">
+                          <div className="metric-value">{activeReport.avg_recommendations_count || 0}</div>
+                          <div className="metric-label">Avg Results</div>
+                        </div>
+                        <div className="report-metric-card highlight-red">
+                          <div className="metric-value">{activeReport.zero_result_queries || 0}</div>
+                          <div className="metric-label">Zero Results</div>
+                        </div>
+                        <div className="report-metric-card">
+                          <div className="metric-value">{activeReport.competitor_query_count || 0}</div>
+                          <div className="metric-label">Competitor Queries</div>
+                        </div>
+                      </div>
+
+                      {/* Query Popularity Ranking */}
+                      {activeReport.popularity_ranking && activeReport.popularity_ranking.length > 0 && (
+                        <div className="report-section">
+                          <div className="section-header">
+                            <h4><TrendingUp size={16} /> Query Popularity Ranking</h4>
+                            <div className="section-controls">
+                              <select
+                                value={reportSortBy}
+                                onChange={(e) => setReportSortBy(e.target.value)}
+                                className="sort-select"
+                              >
+                                <option value="count">Sort by Count</option>
+                                <option value="avg_recommendations">Sort by Avg Results</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="popularity-table-wrapper">
+                            <table className="popularity-table">
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>Query</th>
+                                  <th>Count</th>
+                                  <th>Avg Results</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[...activeReport.popularity_ranking]
+                                  .sort((a, b) => reportSortBy === 'count' ? b.count - a.count : a.avg_recommendations - b.avg_recommendations)
+                                  .slice(0, showAllPopularity ? undefined : 30)
+                                  .map((item, idx) => {
+                                    const rowClass = item.avg_recommendations === 0 ? 'row-danger'
+                                      : item.avg_recommendations < 2 ? 'row-warning' : '';
+                                    return (
+                                      <tr key={idx} className={rowClass}>
+                                        <td>{idx + 1}</td>
+                                        <td className="query-cell">{item.query}</td>
+                                        <td className="count-cell">{item.count}</td>
+                                        <td className="recs-cell">{item.avg_recommendations}</td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {activeReport.popularity_ranking.length > 30 && (
+                            <button
+                              className="btn-show-all"
+                              onClick={() => setShowAllPopularity(!showAllPopularity)}
+                            >
+                              {showAllPopularity ? (
+                                <><ChevronRight size={14} /> Show Less</>
+                              ) : (
+                                <><ChevronDown size={14} /> Show All ({activeReport.popularity_ranking.length})</>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Content Gaps */}
+                      {activeReport.content_gaps && activeReport.content_gaps.length > 0 && (
+                        <div className="report-section">
+                          <div className="section-header">
+                            <h4><AlertCircle size={16} /> Content Gaps ({activeReport.content_gaps.length})</h4>
+                          </div>
+                          <div className="gaps-list">
+                            {[...activeReport.content_gaps]
+                              .sort((a, b) => (b.flagged ? 1 : 0) - (a.flagged ? 1 : 0) || b.gap_score - a.gap_score)
+                              .slice(0, showAllGaps ? undefined : 15)
+                              .map((gap, idx) => {
+                                const originalIdx = activeReport.content_gaps.findIndex(g => g.query === gap.query);
+                                return (
+                                  <div key={idx} className={`gap-card severity-${gap.gap_severity} ${gap.flagged ? 'flagged' : ''}`}>
+                                    <div className="gap-content">
+                                      <div className="gap-query">"{gap.query}"</div>
+                                      <div className="gap-meta">
+                                        <span className={`severity-badge ${gap.gap_severity}`}>
+                                          {gap.gap_severity.toUpperCase()}
+                                        </span>
+                                        <span>{gap.search_count} searches</span>
+                                        <span>{gap.avg_recommendations} avg results</span>
+                                        {gap.content_matches_found !== undefined && (
+                                          <span>{gap.content_matches_found} content matches</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <button
+                                      className={`btn-flag ${gap.flagged ? 'flagged' : ''}`}
+                                      onClick={() => handleFlagGap(activeReport.id, originalIdx)}
+                                      title={gap.flagged ? 'Unflag priority' : 'Flag as priority'}
+                                    >
+                                      <Flag size={14} />
+                                      {gap.flagged ? 'Priority' : 'Flag'}
+                                    </button>
+                                    {/* AI Content Recommendations */}
+                                    {gap.ai_recommendations && gap.ai_recommendations.length > 0 && (
+                                      <div className="gap-ai-recs">
+                                        <div className="ai-recs-header">
+                                          <Sparkles size={12} /> AI Recommended Content
+                                        </div>
+                                        {gap.ai_recommendations.map((rec, rIdx) => (
+                                          <div key={rIdx} className="ai-rec-item">
+                                            <div className="ai-rec-title">
+                                              <span className={`priority-dot ${rec.priority || 'medium'}`} />
+                                              <strong>[{rec.content_type}]</strong> {rec.title}
+                                            </div>
+                                            <div className="ai-rec-meta">
+                                              <span>For: {rec.target_audience}</span>
+                                              {rec.rationale && (
+                                                <span className="ai-rec-rationale">{rec.rationale}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                          {activeReport.content_gaps.length > 15 && (
+                            <button
+                              className="btn-show-all"
+                              onClick={() => setShowAllGaps(!showAllGaps)}
+                            >
+                              {showAllGaps ? 'Show Less' : `Show All (${activeReport.content_gaps.length})`}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Terminology Suggestions from Report */}
+                      {activeReport.suggested_mappings && activeReport.suggested_mappings.length > 0 && (
+                        <div className="report-section">
+                          <div className="section-header">
+                            <h4><Brain size={16} /> Terminology Suggestions ({activeReport.suggested_mappings.length})</h4>
+                          </div>
+                          <div className="report-suggestions-list">
+                            {activeReport.suggested_mappings.map((s, idx) => {
+                              // Find matching pending suggestion to enable approve/reject
+                              const pendingSuggestion = suggestions.find(
+                                ps => ps.user_term === s.user_term && ps.canonical_term === s.canonical_term
+                              );
+                              return (
+                                <div key={idx} className="report-suggestion-card">
+                                  <div className="suggestion-content">
+                                    <div className="suggestion-mapping">
+                                      <span className="user-term">"{s.user_term}"</span>
+                                      <span className="arrow">{'\u2192'}</span>
+                                      <span className="canonical-term">"{s.canonical_term}"</span>
+                                    </div>
+                                    <div className="suggestion-meta">
+                                      <span className={`type-badge ${s.map_type}`}>{s.map_type}</span>
+                                      {s.confidence && (
+                                        <span className="confidence">{Math.round(s.confidence * 100)}%</span>
+                                      )}
+                                      {s.reason && (
+                                        <span className="reason">{s.reason}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {pendingSuggestion && (
+                                    <div className="suggestion-actions">
+                                      <button
+                                        className="btn-approve"
+                                        onClick={() => handleApprove(pendingSuggestion.id)}
+                                        disabled={actionLoading === pendingSuggestion.id}
+                                      >
+                                        <Check size={14} /> Approve
+                                      </button>
+                                      <button
+                                        className="btn-reject"
+                                        onClick={() => handleReject(pendingSuggestion.id)}
+                                        disabled={actionLoading === pendingSuggestion.id}
+                                      >
+                                        <X size={14} /> Reject
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* State & Competitor Mini-Cards */}
+                      <div className="report-mini-cards-row">
+                        {/* State Coverage */}
+                        {activeReport.state_coverage && activeReport.state_coverage.states && (
+                          <div className="report-section mini-card">
+                            <h4><MapPin size={16} /> State Coverage</h4>
+                            <div className="mini-card-list">
+                              {activeReport.state_coverage.states.slice(0, 8).map((s, idx) => (
+                                <div key={idx} className={`mini-item rating-${s.coverage_rating}`}>
+                                  <span className="mini-label">{s.state}</span>
+                                  <span className="mini-count">{s.query_count}x</span>
+                                  <span className={`mini-rating ${s.coverage_rating}`}>{s.coverage_rating}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Competitor Intelligence */}
+                        {activeReport.competitor_analysis && activeReport.competitor_analysis.competitors && (
+                          <div className="report-section mini-card">
+                            <h4><Search size={16} /> Competitor Mentions</h4>
+                            <div className="mini-card-list">
+                              {activeReport.competitor_analysis.competitors.slice(0, 8).map((c, idx) => (
+                                <div key={idx} className={`mini-item rating-${c.result_quality}`}>
+                                  <span className="mini-label">{c.name}</span>
+                                  <span className="mini-count">{c.mention_count}x</span>
+                                  <span className={`mini-rating ${c.result_quality}`}>{c.result_quality}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Standard Reports (collapsed) */}
+                  {standardReports.length > 0 && (
+                    <details className="standard-reports-section">
+                      <summary>Standard Analysis Reports ({standardReports.length})</summary>
+                      <div className="reports-list">
+                        {standardReports.map(report => (
+                          <div key={report.id} className="report-card compact">
+                            <div className="report-header">
+                              <h4>{new Date(report.analysis_date).toLocaleDateString()}</h4>
+                              <span className="report-meta">{report.logs_analyzed} queries</span>
+                            </div>
+                            <p className="report-summary">{report.summary}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+/**
+ * Convert markdown text to formatted HTML for the executive summary.
+ */
+function formatMarkdown(text) {
+  if (!text) return '';
+  return text
+    // Headers
+    .replace(/^### (.*?)$/gm, '<h5 class="exec-h3">$1</h5>')
+    .replace(/^## (.*?)$/gm, '<h4 class="exec-h2">$1</h4>')
+    .replace(/^# (.*?)$/gm, '<h3 class="exec-h1">$1</h3>')
+    // Bold
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // Numbered list items: "1. **Text** - rest" or "1. Text"
+    .replace(/^\s*(\d+)\.\s+/gm, '<li class="exec-li numbered">')
+    // Bullet points
+    .replace(/^\s*[-•]\s+/gm, '<li class="exec-li">')
+    // Close list items at next newline
+    .replace(/<\/li>\n/g, '</li>\n')
+    // Wrap consecutive <li> in <ul>
+    .replace(/(<li[\s\S]*?<\/li>\n?)+/g, '<ul class="exec-list">$&</ul>')
+    // Paragraphs from double newlines
+    .replace(/\n\n/g, '</p><p>')
+    // Single newlines that aren't inside lists
+    .replace(/(?<!<\/li>)\n(?!<)/g, '<br/>')
+    // Clean up
+    .replace(/<p>\s*<ul/g, '<ul')
+    .replace(/<\/ul>\s*<\/p>/g, '</ul>')
+    .replace(/<p>\s*<h/g, '<h')
+    .replace(/<\/h[3-5]>\s*<\/p>/g, (m) => m.replace('</p>', ''))
+    .replace(/<p>\s*<\/p>/g, '');
 }
 
 export default TerminologyAdmin;

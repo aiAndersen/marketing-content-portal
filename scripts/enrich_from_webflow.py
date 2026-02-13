@@ -252,6 +252,7 @@ def enrich_competitor_pages(conn, dry_run: bool = False):
         ('https://www.schoolinks.com/competitors/schoolinks-vs-xello', 'Xello'),
         ('https://www.schoolinks.com/competitors/schoolinks-vs-naviance', 'Naviance'),
         ('https://www.schoolinks.com/competitors/schoolinks-vs-scoir', 'Scoir'),
+        ('https://www.schoolinks.com/competitors/schoolinks-vs-majorclarity', 'MajorClarity'),
     ]
 
     print("\n=== ENRICHING COMPETITOR PAGES ===")

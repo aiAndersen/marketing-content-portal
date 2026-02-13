@@ -256,95 +256,151 @@
           </button>
         </div>
 
-        <!-- Weekly GTM Report Panel -->
+        <!-- Weekly GTM Report Panel - Presentation Ready -->
         <div class="gtm-report-panel" id="gtm-report-panel">
-          <div class="gtm-header" onclick="toggleGTMPanel()">
-            <div class="gtm-header-left">
-              <span class="gtm-icon">📊</span>
-              <h3>Weekly GTM Report</h3>
-              <span class="gtm-badge">Last 7 Days</span>
-            </div>
-            <div class="gtm-header-right">
-              <button class="btn btn-sm btn-primary" onclick="generateGTMReport(event)">
-                Generate Report
+          <!-- Toolbar (hidden in print/screenshot mode) -->
+          <div class="gtm-toolbar no-print">
+            <button class="gtm-generate-btn" onclick="generateGTMReport(event)">
+              <span class="gtm-btn-icon">⚡</span>
+              Generate Report
+            </button>
+            <div class="gtm-toolbar-actions">
+              <button class="gtm-action-btn" onclick="exportGTMReport()" title="Export CSV">
+                <span>📥</span> Export
               </button>
-              <span class="gtm-chevron">▼</span>
+              <button class="gtm-action-btn" onclick="copyGTMInsights()" title="Copy Insights">
+                <span>📋</span> Copy
+              </button>
+              <button class="gtm-action-btn" onclick="toggleGTMPanel()" title="Collapse">
+                <span class="gtm-chevron">▼</span>
+              </button>
             </div>
           </div>
 
-          <div class="gtm-content" id="gtm-content">
-            <!-- Summary Stats Row -->
-            <div class="gtm-summary" id="gtm-summary">
-              <p class="gtm-placeholder">Click "Generate Report" to load the weekly GTM report for sales</p>
-            </div>
-
-            <!-- Three-Column Breakdown -->
-            <div class="gtm-breakdown" id="gtm-breakdown">
-              <div class="gtm-column" id="gtm-by-state">
-                <h4>By Territory</h4>
-                <p class="gtm-placeholder-small">—</p>
+          <div class="gtm-content gtm-presentation" id="gtm-content">
+            <!-- Report Header - For Screenshots -->
+            <div class="gtm-report-header" id="gtm-report-header">
+              <div class="gtm-report-branding">
+                <div class="gtm-logo-badge">
+                  <span class="gtm-logo-icon">🎯</span>
+                </div>
+                <div class="gtm-report-title-group">
+                  <h1 class="gtm-report-title">Weekly Marketing Content Report</h1>
+                  <p class="gtm-report-subtitle">SchooLinks Go-To-Market Enablement</p>
+                </div>
               </div>
-              <div class="gtm-column" id="gtm-by-type">
-                <h4>By Content Type</h4>
-                <p class="gtm-placeholder-small">—</p>
-              </div>
-              <div class="gtm-column" id="gtm-by-topic">
-                <h4>Top Topics</h4>
-                <p class="gtm-placeholder-small">—</p>
-              </div>
-            </div>
-
-            <!-- Customer Stories Showcase -->
-            <div class="gtm-customer-stories" id="gtm-customer-stories">
-              <div class="gtm-stories-header">
-                <h4>🌟 Customer Stories This Week</h4>
-              </div>
-              <p class="gtm-placeholder">Generate the report to see customer stories</p>
-            </div>
-
-            <!-- AI Sales Insights -->
-            <div class="gtm-insights" id="gtm-insights">
-              <div class="gtm-insights-header">
-                <h4>🤖 Sales Relevance Insights</h4>
-                <button class="btn btn-sm btn-ghost" onclick="regenerateGTMInsights(event)">
-                  Refresh Insights
-                </button>
-              </div>
-              <div class="gtm-insights-content" id="gtm-insights-content">
-                <p class="gtm-placeholder">AI-generated insights for the sales team will appear here</p>
+              <div class="gtm-report-meta">
+                <div class="gtm-date-range" id="gtm-date-range">
+                  <span class="gtm-date-label">Report Period</span>
+                  <span class="gtm-date-value">Loading...</span>
+                </div>
+                <div class="gtm-generated-at" id="gtm-generated-at">
+                  <span class="gtm-date-label">Generated</span>
+                  <span class="gtm-date-value">—</span>
+                </div>
               </div>
             </div>
 
-            <!-- Content Table -->
-            <div class="gtm-table-wrapper">
-              <h4>Content Released This Week</h4>
-              <table class="gtm-table" id="gtm-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Title</th>
-                    <th>State</th>
-                    <th>Topics</th>
-                    <th>Link</th>
-                  </tr>
-                </thead>
-                <tbody id="gtm-tbody">
-                  <tr class="empty-row">
-                    <td colspan="6">Generate the report to see content</td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- Executive Summary Stats -->
+            <div class="gtm-executive-summary" id="gtm-summary">
+              <p class="gtm-placeholder">Click "Generate Report" to load the weekly GTM report</p>
             </div>
 
-            <!-- Export Actions -->
-            <div class="gtm-actions">
-              <button class="btn btn-ghost" onclick="exportGTMReport()">
-                📥 Export GTM Report (CSV)
-              </button>
-              <button class="btn btn-ghost" onclick="copyGTMInsights()">
-                📋 Copy Insights to Clipboard
-              </button>
+            <!-- Main Content Grid -->
+            <div class="gtm-main-grid">
+              <!-- Left Column: Breakdowns -->
+              <div class="gtm-breakdowns-column">
+                <div class="gtm-breakdown-card" id="gtm-by-territory">
+                  <div class="gtm-card-header">
+                    <span class="gtm-card-icon">🗺️</span>
+                    <h3>By Territory</h3>
+                  </div>
+                  <div class="gtm-card-content" id="gtm-by-state">
+                    <p class="gtm-placeholder-small">—</p>
+                  </div>
+                </div>
+
+                <div class="gtm-breakdown-card" id="gtm-by-content">
+                  <div class="gtm-card-header">
+                    <span class="gtm-card-icon">📁</span>
+                    <h3>Content Types</h3>
+                  </div>
+                  <div class="gtm-card-content" id="gtm-by-type">
+                    <p class="gtm-placeholder-small">—</p>
+                  </div>
+                </div>
+
+                <div class="gtm-breakdown-card" id="gtm-by-themes">
+                  <div class="gtm-card-header">
+                    <span class="gtm-card-icon">🏷️</span>
+                    <h3>Key Themes</h3>
+                  </div>
+                  <div class="gtm-card-content" id="gtm-by-topic">
+                    <p class="gtm-placeholder-small">—</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Highlights -->
+              <div class="gtm-highlights-column">
+                <!-- Customer Stories Showcase -->
+                <div class="gtm-highlight-section gtm-customer-stories" id="gtm-customer-stories">
+                  <div class="gtm-section-header">
+                    <span class="gtm-section-icon">⭐</span>
+                    <h3>New Customer Stories</h3>
+                    <span class="gtm-section-badge" id="gtm-stories-badge">0</span>
+                  </div>
+                  <div class="gtm-stories-grid" id="gtm-stories-grid">
+                    <p class="gtm-placeholder">Generate report to see customer stories</p>
+                  </div>
+                </div>
+
+                <!-- AI Sales Insights -->
+                <div class="gtm-highlight-section gtm-insights" id="gtm-insights">
+                  <div class="gtm-section-header">
+                    <span class="gtm-section-icon">💡</span>
+                    <h3>Sales Talking Points</h3>
+                    <button class="gtm-refresh-btn no-print" onclick="regenerateGTMInsights(event)" title="Refresh">
+                      ↻
+                    </button>
+                  </div>
+                  <div class="gtm-insights-content" id="gtm-insights-content">
+                    <p class="gtm-placeholder">AI-generated insights will appear here</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Content Table (Collapsible for screenshots) -->
+            <details class="gtm-table-section" id="gtm-table-details">
+              <summary class="gtm-table-toggle">
+                <span class="gtm-table-toggle-icon">📋</span>
+                <span>View Full Content List</span>
+                <span class="gtm-table-count" id="gtm-table-count">(0 items)</span>
+              </summary>
+              <div class="gtm-table-wrapper">
+                <table class="gtm-table" id="gtm-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Title</th>
+                      <th>Territory</th>
+                      <th>Link</th>
+                    </tr>
+                  </thead>
+                  <tbody id="gtm-tbody">
+                    <tr class="empty-row">
+                      <td colspan="5">Generate the report to see content</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </details>
+
+            <!-- Footer -->
+            <div class="gtm-report-footer no-print">
+              <p>Generated by SchooLinks Marketing Portal • <span id="gtm-footer-date"></span></p>
             </div>
           </div>
         </div>

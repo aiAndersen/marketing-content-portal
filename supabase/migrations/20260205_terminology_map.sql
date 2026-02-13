@@ -97,16 +97,19 @@ CREATE POLICY "Allow public read of active terminology"
   ON terminology_map FOR SELECT
   USING (is_active = true);
 
--- Allow authenticated users to insert (for admin interface)
-CREATE POLICY "Allow authenticated insert of terminology"
+-- Allow inserts from admin interface (anon key, app-level auth via #admin route)
+CREATE POLICY "Allow insert of terminology"
   ON terminology_map FOR INSERT
-  TO authenticated
   WITH CHECK (true);
 
--- Allow authenticated users to update (for admin interface)
-CREATE POLICY "Allow authenticated update of terminology"
+-- Allow updates from admin interface
+CREATE POLICY "Allow update of terminology"
   ON terminology_map FOR UPDATE
-  TO authenticated
+  USING (true);
+
+-- Allow deletes from admin interface (for rejecting suggestions)
+CREATE POLICY "Allow delete of terminology"
+  ON terminology_map FOR DELETE
   USING (true);
 
 -- Comment on table

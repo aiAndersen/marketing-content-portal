@@ -520,27 +520,55 @@ def process_static_landing_pages(conn, existing_urls: Set[str], dry_run: bool = 
 
     # Known landing page URL patterns to look for
     landing_page_patterns = [
-        '/product', '/features', '/solutions', '/competitors',
+        '/platform', '/product', '/features', '/solutions', '/competitors',
         '/pricing', '/demo', '/about', '/contact', '/resources',
         '/counselors', '/administrators', '/districts', '/k-12',
         '/college-readiness', '/career-readiness', '/work-based-learning',
-        '/course-planning', '/graduation-tracking', '/fafsa'
+        '/course-planning', '/graduation-tracking', '/fafsa',
+        '/why-schoolinks', '/higher-education', '/industry-partner',
+        '/consolidate', '/welcome-kit', '/ambassadors', '/user-groups',
+        '/college-deadlines', '/texas-ccmr', '/roi-cost', '/security',
+        '/nsc-terms',
     ]
 
-    # Additional known pages to check
+    # All known landing pages from the SchooLinks.com sitemap
     known_pages = [
+        # Core pages
+        '/why-schoolinks',
+        '/platform',
+        '/about',
+        '/resources',
+        '/higher-education',
+        # Platform / feature pages
+        '/platform/portrait-of-a-graduate',
+        '/platform/course-planning',
+        '/platform/college-application-manager',
+        '/platform/student-experience-wbl',
+        '/platform/district-experience-wbl',
+        '/platform/alumni',
+        '/platform/state-reporting-solutions',
+        '/platform/agentic-ai-layer',
+        # Competitor comparison pages
         '/competitors/schoolinks-vs-naviance',
         '/competitors/schoolinks-vs-xello',
         '/competitors/schoolinks-vs-scoir',
         '/competitors/schoolinks-vs-majorclarity',
-        '/product/college-readiness',
-        '/product/career-readiness',
-        '/product/work-based-learning',
-        '/product/course-planning',
-        '/product/counselor-tools',
-        '/solutions/districts',
-        '/solutions/counselors',
-        '/solutions/administrators',
+        # Industry partner pages
+        '/industry-partners',
+        '/industry-partner-solutions',
+        '/industry-partner-csr',
+        '/industry-partner-sign-up',
+        # Campaign / specialty pages
+        '/welcome-kit',
+        '/consolidate-save',
+        '/college-deadlines',
+        '/texas-ccmr-cte',
+        '/ambassadors',
+        '/user-groups',
+        '/roi-cost-comparison-calculator',
+        '/roi-cost-comparison-calculator-enhanced',
+        # Security
+        '/security',
     ]
 
     # Get pages from Webflow API
@@ -632,12 +660,17 @@ def process_static_landing_pages(conn, existing_urls: Set[str], dry_run: bool = 
         # Determine type from URL
         content_type = 'Landing Page'
         if '/competitors/' in page_path:
-            content_type = 'Landing Page'  # Competitor comparison pages
             tags_extra = 'competitor-comparison'
+        elif '/platform/' in page_path:
+            tags_extra = 'platform-page, product-page'
         elif '/product/' in page_path:
             tags_extra = 'product-page'
         elif '/solutions/' in page_path:
             tags_extra = 'solutions-page'
+        elif '/industry-partner' in page_path:
+            tags_extra = 'industry-partner'
+        elif '/roi-cost' in page_path:
+            tags_extra = 'tool, roi-calculator'
         else:
             tags_extra = 'landing-page'
 
