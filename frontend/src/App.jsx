@@ -715,10 +715,17 @@ function App() {
 
       // Apply content type filter if types were detected (includes all variations)
       // Skip type filter for competitor queries - users want ALL content types when comparing
-      if (chatDetectedTypes.length > 0 && primaryIntent !== 'competitor') {
+      // Belt-and-suspenders: check BOTH primaryIntent AND raw query/searchTerms for competitor names
+      // because gpt-4o-mini doesn't always return primaryIntent='competitor' reliably
+      const competitorNames = ['naviance', 'xello', 'scoir', 'majorcla', 'powersch', 'kuder', 'youscience', 'levelall'];
+      const isCompetitorQuery = primaryIntent === 'competitor' ||
+        searchTerms.some(t => competitorNames.some(c => t.toLowerCase().includes(c))) ||
+        competitorNames.some(c => chatQueryLower.includes(c));
+
+      if (chatDetectedTypes.length > 0 && !isCompetitorQuery) {
         console.log('[Chat] Applying type filter with variations:', chatDetectedTypes);
         queryBuilder = queryBuilder.in('type', chatDetectedTypes);
-      } else if (chatDetectedTypes.length > 0 && primaryIntent === 'competitor') {
+      } else if (chatDetectedTypes.length > 0 && isCompetitorQuery) {
         console.log('[Chat] Skipping type filter for competitor query - showing all content types');
       }
 
@@ -762,6 +769,15 @@ function App() {
           chatDetectedTypes.some(t => t.toLowerCase().includes(term.toLowerCase()) || term.toLowerCase().includes(t.toLowerCase()))
         );
 
+      // Ensure competitor names from raw query are always in search terms
+      // (NLP may omit them, e.g. returning ["comparison"] instead of ["naviance"])
+      for (const comp of competitorNames) {
+        if (chatQueryLower.includes(comp) && !filteredSearchTerms.some(t => t.toLowerCase().includes(comp))) {
+          filteredSearchTerms.push(comp);
+          console.log(`[Chat] Injected competitor term "${comp}" missing from NLP searchTerms`);
+        }
+      }
+
       // Only apply keyword search if NOT a type-only search
       if (filteredSearchTerms.length > 0 && !isChatTypeOnlySearch) {
         const searchConditions = filteredSearchTerms.flatMap(term => {
@@ -788,9 +804,10 @@ function App() {
 
       // CRITICAL: Filter out wrong competitors when searching for a specific competitor
       // If searching for Xello, exclude ALL Naviance content (and vice versa)
+      // Check BOTH searchTerms AND raw query text for reliability (NLP may omit competitor names)
       const searchTermsLower = searchTerms.map(t => t.toLowerCase());
-      const isXelloSearch = searchTermsLower.some(t => t.includes('xello'));
-      const isNavianceSearch = searchTermsLower.some(t => t.includes('naviance'));
+      const isXelloSearch = searchTermsLower.some(t => t.includes('xello')) || chatQueryLower.includes('xello');
+      const isNavianceSearch = searchTermsLower.some(t => t.includes('naviance')) || chatQueryLower.includes('naviance');
 
       console.log('[Chat] Competitor detection:', { isXelloSearch, isNavianceSearch, searchTerms });
       const beforeFilterCount = contentForContext.length;
