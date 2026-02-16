@@ -1,0 +1,76 @@
+name: Daily Health Check
+
+# Run at 5:30 AM UTC (before all other scheduled jobs)
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+    inputs:
+      baseline_days:
+        description: 'Baseline comparison window (days)'
+        required: false
+        default: '7'
+        type: string
+      skip_ai:
+        description: 'Skip AI anomaly detection'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Validate secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not configured. Go to repo Settings > Secrets > Actions to add it."
+            exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret is not configured. Go to repo Settings > Secrets > Actions to add it."
+            exit 1
+          fi
+          echo "All required secrets are configured."
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Run health monitor
+        continue-on-error: true
+        run: |
+          BASELINE="${{ github.event.inputs.baseline_days || '7' }}"
+          SKIP_AI_FLAG=""
+          if [ "${{ github.event.inputs.skip_ai }}" = "true" ]; then
+            SKIP_AI_FLAG="--skip-ai"
+          fi
+          python scripts/health_monitor.py \
+            --baseline-days "$BASELINE" \
+            --alert \
+            --output /tmp/health_report.json \
+            $SKIP_AI_FLAG \
+            -v
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Upload health report
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-health-report
+          path: /tmp/health_report.json
+          retention-days: 30
+        if: always()

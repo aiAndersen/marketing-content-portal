@@ -1,0 +1,96 @@
+name: Weekly Content Import
+
+# Run every Monday at 10 AM UTC (after weekly audit at 9 AM)
+on:
+  schedule:
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Source list (comma-separated: webflow,hubspot,google_drive,webflow_landing)'
+        required: false
+        default: 'webflow,webflow_landing'
+        type: string
+      enrich_limit:
+        description: 'Max records to enrich after import'
+        required: false
+        default: '20'
+        type: string
+      skip_enrich:
+        description: 'Skip post-import enrichment'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Validate secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not configured. Go to repo Settings > Secrets > Actions to add it."
+            exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret is not configured. Go to repo Settings > Secrets > Actions to add it."
+            exit 1
+          fi
+          echo "All required secrets are configured."
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Decode Google Service Account Key (if available)
+        if: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 }}
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 }}" | base64 -d > scripts/google-service-account-key.json
+          echo "GOOGLE_SERVICE_ACCOUNT_KEY_PATH=scripts/google-service-account-key.json" >> $GITHUB_ENV
+
+      - name: Run import orchestrator
+        continue-on-error: true
+        run: |
+          SOURCES="${{ github.event.inputs.sources || 'webflow,webflow_landing' }}"
+          ENRICH_LIMIT="${{ github.event.inputs.enrich_limit || '20' }}"
+          SKIP_ENRICH_FLAG=""
+          if [ "${{ github.event.inputs.skip_enrich }}" = "true" ]; then
+            SKIP_ENRICH_FLAG="--skip-enrich"
+          fi
+          python scripts/import_orchestrator.py \
+            --sources "$SOURCES" \
+            --enrich-limit "$ENRICH_LIMIT" \
+            $SKIP_ENRICH_FLAG \
+            --output /tmp/import_report.json \
+            -v
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_KEY_PATH: ${{ env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH }}
+
+      - name: Upload import report
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-import-report
+          path: /tmp/import_report.json
+          retention-days: 90
+        if: always()
+
+      - name: Cleanup service account key
+        if: always()
+        run: |
+          rm -f scripts/google-service-account-key.json

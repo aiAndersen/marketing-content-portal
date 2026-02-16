@@ -222,11 +222,16 @@ For local development, the content submission app falls back to `LOCAL_DEV_CONFI
 - [ ] AI queries route to appropriate model
 - [ ] Local dev fallback works with LOCAL_DEV_CONFIG
 
-## Agent Skills
+## Agent Skills & Agents
 
-Reusable agent skills for database maintenance and enrichment. Full documentation: https://github.com/aiAndersen/ai-agent-skills
+Reusable skills and multi-step agents for database maintenance, enrichment, and operations.
+Full documentation: https://github.com/aiAndersen/ai-agent-skills
 
-### /audit-db
+### Skills (Single-Script Runners)
+
+Skills are single-command invocations. Each runs one script with specific flags.
+
+#### /audit-db
 **Comprehensive database audit for tagging opportunities**
 ```bash
 python scripts/audit_content_tags.py -v --output /tmp/audit_report.json
@@ -236,7 +241,7 @@ Reports: missing tags, missing keywords, missing summaries, unenriched content, 
 - Schedule: Weekly (Monday 9 AM UTC) via `weekly-audit.yml`
 - Cost: ~$0.20/run
 
-### /enrich
+#### /enrich
 **Deep enrichment pipeline on unenriched content**
 ```bash
 python scripts/enrich_deep.py --limit 20 -v
@@ -246,7 +251,7 @@ Extracts text from URLs and uses gpt-5.2 to generate weighted JSONB keywords, en
 - Schedule: Daily (7 AM UTC) via `daily-enrichment.yml`
 - Cost: ~$0.04/record, ~$0.80 for 20 records
 
-### /fix-tags
+#### /fix-tags
 **Tag hygiene across all content**
 ```bash
 python scripts/submission_agent_improver.py --fix-tags --fix-spelling --apply
@@ -256,7 +261,7 @@ Removes redundant tags, fixes brand misspellings, converts array format tags.
 - Schedule: Daily (8 AM UTC) via `daily-hygiene.yml`
 - Cost: Free (rule-based)
 
-### /analyze-logs
+#### /analyze-logs
 **Search log analysis for quality issues**
 ```bash
 python scripts/log_analyzer.py --days 7 --auto-suggest-terms -v
@@ -266,7 +271,7 @@ Analyzes `ai_prompt_logs` for zero-result queries, terminology gaps, and pattern
 - Schedule: Daily (6 AM UTC) via `log-analysis.yml`
 - Cost: ~$0.01/run
 
-### /content-gaps
+#### /content-gaps
 **Content gap analysis based on search popularity**
 ```bash
 python scripts/query_popularity_report.py --days 30 -v
@@ -276,11 +281,73 @@ Ranks queries by popularity, identifies high-demand topics with low content, gen
 - Schedule: On-demand
 - Cost: ~$0.50/run
 
+### Agents (Multi-Step Orchestrators)
+
+Agents are multi-step workflows that orchestrate multiple scripts, run checks, make decisions, and provide actionable output.
+
+#### /deploy-check
+**Pre-deployment safety validation agent** (6 steps)
+```bash
+python scripts/deploy_preflight.py --target staging -v
+```
+Steps: (1) Verify env vars across local, Vercel, GitHub (2) Build frontend and check for errors (3) Detect pending migrations (4) Database health snapshot (5) Git state validation (6) Go/no-go report.
+- Options: `--target {staging,production}`, `--skip-build`, `--skip-vercel`, `--strict`, `--output FILE`, `--dry-run`
+- Orchestrates: `npm run build`, `vercel env ls`, `gh secret list`, DB health queries
+- Schedule: On-demand (run before every deploy)
+- Workflow: `pre-deploy-check.yml` (triggers on PRs to main/staging)
+- Cost: Free (no AI calls)
+
+#### /health-monitor
+**System health and search quality monitoring agent** (6 steps)
+```bash
+python scripts/health_monitor.py --baseline-days 7 -v
+```
+Steps: (1) Query quality vs baseline (2) Content freshness + extraction errors (3) Pipeline execution status (4) Terminology health (5) AI anomaly detection (6) Alert-formatted output.
+- Options: `--baseline-days N`, `--alert`, `--skip-ai`, `--threshold-zero-rate FLOAT`, `--output FILE`, `--dry-run`
+- Orchestrates: DB queries against `ai_prompt_logs`, `marketing_content`, `log_analysis_reports`, `terminology_map`
+- Schedule: Daily (5:30 AM UTC) via `daily-health-check.yml` — runs BEFORE all other jobs
+- Cost: ~$0.01/run (gpt-4o-mini anomaly check)
+
+#### /diagnose-search
+**Search quality debugging agent** (6 steps)
+```bash
+python scripts/diagnose_search.py "your search query" -v
+```
+Steps: (1) Execute query against DB (2) Trace terminology mappings (3) Analyze keyword weight overlap (4) Find missed content (5) AI diagnosis with fix recommendations (6) Optional auto-fix terminology.
+- Options: `QUERY` (positional), `--query-id UUID`, `--worst N`, `--auto-fix`, `--output FILE`, `--dry-run`
+- Orchestrates: DB queries against `marketing_content`, `terminology_map`, `ai_prompt_logs`; AI diagnosis via gpt-5-mini
+- Schedule: On-demand (use when search quality issues are reported)
+- Cost: ~$0.02/query diagnosed
+
+#### /import-all
+**Unified content import orchestrator** (7 steps)
+```bash
+python scripts/import_orchestrator.py --enrich-limit 20 -v
+```
+Steps: (1) Pre-import snapshot (2) Test source connectivity (3) Run imports: Webflow, HubSpot, Google Drive (4) Cross-source deduplication (5) Enrich new records (6) Post-import audit (7) Delta report.
+- Options: `--sources LIST`, `--skip-enrich`, `--skip-dedup`, `--enrich-limit N`, `--output FILE`, `--dry-run`
+- Orchestrates: `import_webflow_resources.py`, `import_webflow_landing_pages.py`, `import_hubspot_files.py`, `import_google_drive.py`, `enrich_deep.py`, `dedup_content.py`, `audit_content_tags.py`
+- Schedule: Weekly (Monday 10 AM UTC) via `weekly-import.yml`
+- Cost: ~$0.80/run (mostly from enrichment of new records)
+
+#### /full-maintenance
+**Complete maintenance cycle orchestrator** (8 steps)
+```bash
+python scripts/maintenance_orchestrator.py --mode daily -v
+```
+Steps: (1) Pre-health check (gate) (2) Log analysis (3) Content enrichment (4) Tag hygiene (5) Content audit [weekly] (6) Content gaps [weekly] (7) Post-health check + delta (8) Maintenance report.
+- Options: `--mode {daily,weekly,full}`, `--skip LIST`, `--enrich-limit N`, `--stop-on-error`, `--output FILE`, `--dry-run`
+- Orchestrates: `health_monitor.py`, `log_analyzer.py`, `enrich_deep.py`, `submission_agent_improver.py`, `fix_tag_format.py`, `audit_content_tags.py`, `query_popularity_report.py`
+- Schedule: On-demand (can replace individual workflows if desired)
+- Cost: ~$1.00/daily, ~$1.70/weekly
+
 ### Automated Schedule
 
-| Time (UTC) | Workflow | Skill | Frequency |
-|------------|----------|-------|-----------|
+| Time (UTC) | Workflow | Agent/Skill | Frequency |
+|------------|----------|-------------|-----------|
+| 5:30 AM | `daily-health-check.yml` | `/health-monitor` | Daily |
 | 6 AM | `log-analysis.yml` | `/analyze-logs` | Daily |
 | 7 AM | `daily-enrichment.yml` | `/enrich` | Daily |
 | 8 AM | `daily-hygiene.yml` | `/fix-tags` | Daily |
 | 9 AM Mon | `weekly-audit.yml` | `/audit-db` | Weekly |
+| 10 AM Mon | `weekly-import.yml` | `/import-all` | Weekly |
