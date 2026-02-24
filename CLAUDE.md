@@ -140,6 +140,29 @@ python ai_context_manager.py list   # View AI context
 ### Backend/Scripts
 - `OPENAI_API_KEY` - OpenAI API key (server-side only)
 - `DATABASE_URL` - Direct PostgreSQL connection string
+- `HUBSPOT_API_KEY` - HubSpot Private App token (server-side only, used by `/api/hubspot-deals` serverless function)
+
+### Managing Vercel Environment Variables (use CLI)
+```bash
+# List all env vars
+vercel env ls
+
+# Add a variable to staging/preview
+echo "value" | vercel env add VAR_NAME preview
+
+# Add a variable to production
+echo "value" | vercel env add VAR_NAME production
+
+# Add to both
+echo "value" | vercel env add VAR_NAME preview production
+
+# Remove a variable
+vercel env rm VAR_NAME preview
+
+# Pull all env vars to local .env.local
+vercel env pull
+```
+> Always use the Vercel CLI (not the dashboard) to manage env vars so changes are repeatable and documented here.
 
 ## Gotchas
 
