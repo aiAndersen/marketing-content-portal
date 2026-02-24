@@ -143,7 +143,16 @@ python ai_context_manager.py list   # View AI context
 - `HUBSPOT_API_KEY` - HubSpot Private App token (server-side only, used by `/api/hubspot-deals` serverless function)
 
 ### Managing Vercel Environment Variables (use CLI)
+
+**Correct Vercel project name: `marekting-content-portal`** (schoolinks-projects scope)
+- Production URL: https://marekting-content-portal.vercel.app
+- Staging URL alias: https://marekting-content-portal-git-staging-schoolinks-projects.vercel.app
+- NOTE: There is also an old `marketing-content-portal` project — that is NOT the active one
+
 ```bash
+# Ensure repo is linked to the correct project
+vercel link --project marekting-content-portal --scope schoolinks-projects --yes
+
 # List all env vars
 vercel env ls
 
@@ -161,6 +170,9 @@ vercel env rm VAR_NAME preview
 
 # Pull all env vars to local .env.local
 vercel env pull
+
+# Redeploy latest staging build (after adding env var)
+vercel redeploy <deployment-url> --no-wait
 ```
 > Always use the Vercel CLI (not the dashboard) to manage env vars so changes are repeatable and documented here.
 
