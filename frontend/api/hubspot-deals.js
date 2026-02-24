@@ -110,7 +110,7 @@ async function getCompany(apiKey, companyId) {
   try {
     const data = await hubspotFetch(
       apiKey,
-      `/crm/v3/objects/companies/${companyId}?properties=name,city,state,enrollment,description,industry`
+      `/crm/v3/objects/companies/${companyId}?properties=name,city,state,enrollment,description,industry,hubspot_owner_id`
     );
     return data.properties || {};
   } catch {
@@ -225,6 +225,11 @@ async function enrichDeal(apiKey, deal, stageId) {
     contactIds[0] ? getFormSubmissionNotes(apiKey, contactIds[0]) : Promise.resolve(null),
   ]);
 
+  // Company owner (may differ from deal owner)
+  const companyOwnerName = company.hubspot_owner_id && company.hubspot_owner_id !== props.hubspot_owner_id
+    ? await getOwnerName(apiKey, company.hubspot_owner_id)
+    : null;
+
   const acv = props.acv ? parseFloat(props.acv) : null;
   const enrollment = company.enrollment ? parseInt(company.enrollment, 10) : null;
   const contactName = [contact.firstname, contact.lastname].filter(Boolean).join(' ') || null;
@@ -268,6 +273,7 @@ async function enrichDeal(apiKey, deal, stageId) {
     companyCity: company.city || null,
     companyDescription: company.description || null,
     ownerName,
+    companyOwnerName,
     meetingBooked: meetingIds.length > 0,
     dateEnteredStage: props[dateEnteredProp]
       ? new Date(parseInt(props[dateEnteredProp], 10)).toISOString()

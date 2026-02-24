@@ -33,50 +33,49 @@ function InboundDealModal({ deal, onClose }) {
     setAiOutput(null);
 
     try {
-      // Fetch state-matched content from Supabase — include both link types
-      let contentContext = '';
+      // Fetch state-matched content from Supabase with IDs for reliable link lookup
       let supabaseItems = [];
       if (deal.companyState) {
         const { data: contentItems } = await supabaseClient
           .from('marketing_content')
-          .select('title, type, summary, state, live_link, ungated_link')
+          .select('id, title, type, summary, state, live_link, ungated_link')
           .or(`state.eq.${deal.companyState},state.eq.National`)
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(12);
 
-        if (contentItems && contentItems.length > 0) {
-          supabaseItems = contentItems;
-          contentContext = '\n\nAVAILABLE CONTENT FOR THIS STATE:\n' +
-            contentItems.map((c, i) =>
-              `${i + 1}. [${c.type}] "${c.title}"${c.state ? ` (${c.state})` : ''}\n` +
-              `   ${c.summary ? c.summary.substring(0, 120) + '...' : 'No summary'}\n` +
-              `   ${c.live_link ? `View: ${c.live_link}` : ''}${c.live_link && c.ungated_link ? ' | ' : ''}${c.ungated_link ? `Download: ${c.ungated_link}` : ''}`
-            ).join('\n');
-        }
+        supabaseItems = contentItems || [];
       }
+
+      // Build numbered content list — AI returns item numbers, we look up links by index
+      const contentContext = supabaseItems.length > 0
+        ? '\n\nAVAILABLE CONTENT (state-matched):\n' +
+          supabaseItems.map((c, i) =>
+            `[#${i + 1}] [${c.type}] "${c.title}"${c.state && c.state !== 'National' ? ` (${c.state})` : ' (National)'}\n` +
+            `   ${c.summary ? c.summary.substring(0, 150) + '...' : 'No summary'}`
+          ).join('\n')
+        : '';
 
       const systemPrompt = `You are a B2B sales enablement assistant helping a school district software sales rep prepare for outreach to a new inbound lead.
 
-Your job: Given deal context and available content assets, recommend the most relevant 3-5 pieces of content for this specific prospect AND suggest 2-3 personalized outreach tactics.
+Your job: Recommend the most relevant 3-5 content assets for this specific prospect AND suggest 2-3 personalized outreach tactics based on their demo form notes and district context.
 
-IMPORTANT: Only recommend content from the AVAILABLE CONTENT list provided. Use the exact title. Include the exact View and Download URLs from the list.
+IMPORTANT: Only recommend items from the AVAILABLE CONTENT list. Return the content_index number (e.g., 1, 3, 5) — do NOT copy URLs.
 
 Respond ONLY with valid JSON in this exact structure:
 {
   "recommendations": [
     {
       "rank": 1,
-      "title": "exact content title from list",
+      "content_index": 3,
+      "title": "exact title from list",
       "type": "content type",
-      "reason": "1-2 sentence explanation of why this fits this specific prospect",
-      "live_link": "View URL from list or null",
-      "ungated_link": "Download URL from list or null"
+      "reason": "1-2 sentences explaining why this fits this specific prospect's notes and context"
     }
   ],
   "tactics": [
-    "Specific tactic sentence 1 referencing this prospect's context",
-    "Specific tactic sentence 2",
-    "Specific tactic sentence 3"
+    "Specific, personalized tactic referencing this prospect's form notes or district",
+    "Tactic 2",
+    "Tactic 3"
   ]
 }`;
 
@@ -86,16 +85,16 @@ Respond ONLY with valid JSON in this exact structure:
 - Enrollment: ${deal.enrollment ? deal.enrollment.toLocaleString() + ' students' : 'Unknown'}
 - ACV: ${deal.acv != null ? formatCurrency(deal.acv) : 'Unknown'}
 - Contact: ${deal.contactName || 'Unknown'}${deal.contactTitle ? `, ${deal.contactTitle}` : ''}${deal.contactEmail ? ` (${deal.contactEmail})` : ''}
-- Contact Role (Demo Form): ${deal.contactRole || 'Unknown'}
+- Contact Role: ${deal.contactRole || 'Unknown'}
 - Meeting booked: ${deal.meetingBooked ? 'YES' : 'NO'}
-- Owner: ${deal.ownerName || 'Unknown'}
+- Rep Owner: ${deal.ownerName || 'Unknown'}${deal.companyOwnerName ? ` | Acct Owner: ${deal.companyOwnerName}` : ''}
 ${deal.companyDescription ? `- District background: ${deal.companyDescription.substring(0, 300)}` : ''}
 
-DEMO REQUEST FORM NOTES (what the prospect wrote):
+DEMO REQUEST FORM NOTES (what the prospect wrote when submitting the demo request):
 ${deal.demoFormNotes || 'No notes provided.'}
 ${contentContext}
 
-Based on this prospect's context and their form notes, which content assets are most relevant and what are the best personalized outreach tactics?`;
+Which content items (#) are most relevant to this prospect and what personalized outreach tactics should the rep use?`;
 
       const response = await fetch('/api/openai', {
         method: 'POST',
@@ -123,16 +122,23 @@ Based on this prospect's context and their form notes, which content assets are 
       if (!jsonMatch) throw new Error('Invalid AI response format');
       const parsed = JSON.parse(jsonMatch[0]);
 
-      // Enrich recommendations with Supabase links as fallback if AI missed them
+      // Resolve content links from Supabase by content_index — guaranteed correct URLs
       if (parsed.recommendations && supabaseItems.length > 0) {
         parsed.recommendations = parsed.recommendations.map(rec => {
-          if (rec.live_link || rec.ungated_link) return rec;
-          const match = supabaseItems.find(
-            item => item.title?.toLowerCase() === rec.title?.toLowerCase()
-          );
-          return match
-            ? { ...rec, live_link: match.live_link || null, ungated_link: match.ungated_link || null }
-            : rec;
+          const idx = typeof rec.content_index === 'number' ? rec.content_index - 1 : -1;
+          const item = idx >= 0 ? supabaseItems[idx] : null;
+          // Fallback: fuzzy title match if index missing
+          const fallback = !item
+            ? supabaseItems.find(s =>
+                s.title?.toLowerCase().includes(rec.title?.toLowerCase()?.slice(0, 20))
+              )
+            : null;
+          const source = item || fallback;
+          return {
+            ...rec,
+            live_link: source?.live_link || null,
+            ungated_link: source?.ungated_link || null,
+          };
         });
       }
 

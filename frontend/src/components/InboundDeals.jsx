@@ -138,8 +138,13 @@ function InboundDealCard({ deal, onClick }) {
         </span>
       </div>
 
-      {deal.ownerName && (
-        <div className="inbound-card-owner">Owner: {deal.ownerName}</div>
+      {(deal.ownerName || deal.companyOwnerName) && (
+        <div className="inbound-card-owner">
+          {deal.ownerName && <span>Rep: {deal.ownerName}</span>}
+          {deal.companyOwnerName && (
+            <span>{deal.ownerName ? ' · ' : ''}Acct: {deal.companyOwnerName}</span>
+          )}
+        </div>
       )}
 
       <div className="inbound-card-age">
