@@ -178,21 +178,29 @@ async function getFormSubmissionNotes(apiKey, contactId) {
   try {
     const data = await hubspotFetch(
       apiKey,
-      `/marketing/v3/forms/submissions/contacts/${contactId}?limit=3`
+      `/marketing/v3/forms/submissions/contacts/${contactId}?limit=5`
     );
     const submissions = data.results || [];
+    console.log(`[hubspot-deals] contact ${contactId} form submissions: ${submissions.length}`);
     if (submissions.length === 0) return null;
 
+    // Log all field names from the most recent submission for debugging
     const latest = submissions[0];
-    const TEXT_FIELD_KEYWORDS = ['message', 'notes', 'your_message', 'demo_notes',
-      'comments_or_questions', 'what_brings_you', 'how_can_we_help'];
+    const allFieldNames = (latest.values || []).map(v => v.name).join(', ');
+    console.log(`[hubspot-deals] contact ${contactId} form fields: ${allFieldNames}`);
+
+    const TEXT_FIELD_KEYWORDS = [
+      'form_fill', 'fill_notes', 'message', 'notes', 'your_message',
+      'demo_notes', 'comments_or_questions', 'what_brings_you', 'how_can_we_help',
+    ];
     const fieldValues = (latest.values || [])
       .filter(v => TEXT_FIELD_KEYWORDS.some(k => v.name?.toLowerCase().includes(k)))
       .map(v => v.value)
       .filter(Boolean)
       .join('\n');
     return fieldValues || null;
-  } catch {
+  } catch (err) {
+    console.log(`[hubspot-deals] getFormSubmissionNotes failed for contact ${contactId}: ${err.message}`);
     return null;
   }
 }
@@ -243,6 +251,12 @@ async function enrichDeal(apiKey, deal, stageId) {
     : contactNotes ? 'crm_notes'
     : 'none';
   console.log(`[hubspot-deals] deal ${deal.id} notes source: ${notesSource}`);
+  // Log all non-null contact properties to identify the correct form field name
+  const contactPropDebug = Object.entries(contact)
+    .filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `${k}=${String(v).substring(0, 60)}`)
+    .join(', ');
+  console.log(`[hubspot-deals] deal ${deal.id} contact props: ${contactPropDebug}`);
 
   return {
     id: deal.id,

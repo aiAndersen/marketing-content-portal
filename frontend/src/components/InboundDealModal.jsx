@@ -106,7 +106,7 @@ Based on this prospect's context and their form notes, which content assets are 
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          max_tokens: 1500,
+          max_completion_tokens: 1500,
         }),
       });
 
