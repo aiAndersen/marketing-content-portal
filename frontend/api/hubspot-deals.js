@@ -221,6 +221,7 @@ async function enrichDeal(apiKey, deal, stageId) {
 
   // Fetch company first so we can use company.hubspot_owner_id in the next parallel batch
   const company = companyIds[0] ? await getCompany(apiKey, companyIds[0]) : {};
+  console.log(`[hubspot-deals] deal ${deal.id} company_id: ${companyIds[0] || 'NONE'}, company.hubspot_owner_id: ${company.hubspot_owner_id || 'NOT SET'}, deal.hubspot_owner_id: ${props.hubspot_owner_id || 'NOT SET'}`);
 
   // Fetch contact, deal owner, company owner, and notes in parallel
   const [contact, ownerName, companyOwnerName, contactNotes, formNotes] = await Promise.all([
