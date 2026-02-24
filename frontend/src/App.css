@@ -3636,6 +3636,25 @@ body {
   margin-left: 4px;
 }
 
+.inbound-phone-link {
+  color: var(--sl-gray-500);
+  text-decoration: none;
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.inbound-contact-title {
+  color: var(--sl-gray-500);
+  font-weight: 400;
+}
+
+.inbound-contact-role {
+  color: var(--sl-gray-400);
+  font-size: 0.78rem;
+}
+
 .inbound-email-link:hover {
   text-decoration: underline;
 }
@@ -3759,15 +3778,36 @@ body {
   line-height: 1.5;
 }
 
+.inbound-suggestion-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
 .inbound-suggestion-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #0369a1;
   text-decoration: none;
-  margin-top: 2px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px solid;
+}
+
+.inbound-suggestion-link.view {
+  color: #0369a1;
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.inbound-suggestion-link.download {
+  color: #15803d;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
 }
 
 .inbound-suggestion-link:hover {

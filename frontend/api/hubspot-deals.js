@@ -121,7 +121,8 @@ async function getCompany(apiKey, companyId) {
 async function getContact(apiKey, contactId) {
   try {
     const props = [
-      'firstname', 'lastname', 'email',
+      'firstname', 'lastname', 'email', 'jobtitle', 'phone',
+      'form_fill_notes', 'demo_role',
       'message', 'hs_content_membership_notes',
       'notes_last_contacted', 'your_message', 'demo_notes', 'comments_or_questions',
     ].join(',');
@@ -220,8 +221,9 @@ async function enrichDeal(apiKey, deal, stageId) {
   const enrollment = company.enrollment ? parseInt(company.enrollment, 10) : null;
   const contactName = [contact.firstname, contact.lastname].filter(Boolean).join(' ') || null;
 
-  // Demo form notes: try contact properties first, then form submissions, then CRM notes
+  // Demo form notes: form_fill_notes is the canonical "Demo Request Form - Chili-Piper" field
   const demoFormNotes =
+    contact.form_fill_notes ||
     contact.message ||
     contact.hs_content_membership_notes ||
     contact.your_message ||
@@ -231,7 +233,8 @@ async function enrichDeal(apiKey, deal, stageId) {
     contactNotes ||
     null;
 
-  const notesSource = contact.message ? 'contact.message'
+  const notesSource = contact.form_fill_notes ? 'form_fill_notes'
+    : contact.message ? 'contact.message'
     : contact.hs_content_membership_notes ? 'hs_content_membership_notes'
     : contact.your_message ? 'contact.your_message'
     : contact.demo_notes ? 'contact.demo_notes'
@@ -259,6 +262,9 @@ async function enrichDeal(apiKey, deal, stageId) {
     demoFormNotes,
     contactName,
     contactEmail: contact.email || null,
+    contactTitle: contact.jobtitle || null,
+    contactRole: contact.demo_role || null,
+    contactPhone: contact.phone || null,
   };
 }
 
