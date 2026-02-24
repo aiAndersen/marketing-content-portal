@@ -219,19 +219,17 @@ async function enrichDeal(apiKey, deal, stageId) {
     getAssociationIds(apiKey, deal.id, 'meetings'),
   ]);
 
-  // Fetch company, contact, owner, and notes in parallel
-  const [company, contact, ownerName, contactNotes, formNotes] = await Promise.all([
-    companyIds[0] ? getCompany(apiKey, companyIds[0]) : Promise.resolve({}),
+  // Fetch company first so we can use company.hubspot_owner_id in the next parallel batch
+  const company = companyIds[0] ? await getCompany(apiKey, companyIds[0]) : {};
+
+  // Fetch contact, deal owner, company owner, and notes in parallel
+  const [contact, ownerName, companyOwnerName, contactNotes, formNotes] = await Promise.all([
     contactIds[0] ? getContact(apiKey, contactIds[0]) : Promise.resolve({}),
     getOwnerName(apiKey, props.hubspot_owner_id),
+    company.hubspot_owner_id ? getOwnerName(apiKey, company.hubspot_owner_id) : Promise.resolve(null),
     contactIds[0] ? getContactNotes(apiKey, contactIds[0]) : Promise.resolve(null),
     contactIds[0] ? getFormSubmissionNotes(apiKey, contactIds[0]) : Promise.resolve(null),
   ]);
-
-  // Company owner (may differ from deal owner)
-  const companyOwnerName = company.hubspot_owner_id && company.hubspot_owner_id !== props.hubspot_owner_id
-    ? await getOwnerName(apiKey, company.hubspot_owner_id)
-    : null;
 
   const acv = props.acv ? parseFloat(props.acv) : null;
   const enrollment = company.enrollment ? parseInt(company.enrollment, 10) : null;
