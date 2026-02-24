@@ -77,6 +77,9 @@ async function searchDeals(apiKey, stageId) {
       'hs_analytics_source',
       'dealstage',
       'hubspot_owner_id',
+      'demo_set_by_profile',
+      'hs_latest_source',
+      'hs_latest_source_data_1',
       dateEnteredProp,
       'createdate',
       'closedate',
@@ -279,6 +282,8 @@ async function enrichDeal(apiKey, deal, stageId) {
       ? new Date(parseInt(props[dateEnteredProp], 10)).toISOString()
       : null,
     leadSource: props.lead_source || props.hs_analytics_source || null,
+    trafficSource: props.hs_latest_source_data_1 || props.hs_latest_source || null,
+    demoSetBy: props.demo_set_by_profile || null,
     demoFormNotes,
     contactName,
     contactEmail: contact.email || null,

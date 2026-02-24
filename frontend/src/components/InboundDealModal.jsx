@@ -88,6 +88,7 @@ Respond ONLY with valid JSON in this exact structure:
 - Contact Role: ${deal.contactRole || 'Unknown'}
 - Meeting booked: ${deal.meetingBooked ? 'YES' : 'NO'}
 - Rep Owner: ${deal.ownerName || 'Unknown'}${deal.companyOwnerName ? ` | Acct Owner: ${deal.companyOwnerName}` : ''}
+${deal.trafficSource ? `- Lead traffic source: ${deal.trafficSource}` : ''}
 ${deal.companyDescription ? `- District background: ${deal.companyDescription.substring(0, 300)}` : ''}
 
 DEMO REQUEST FORM NOTES (what the prospect wrote when submitting the demo request):
