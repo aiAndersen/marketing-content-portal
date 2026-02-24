@@ -281,6 +281,40 @@ Ranks queries by popularity, identifies high-demand topics with low content, gen
 - Schedule: On-demand
 - Cost: ~$0.50/run
 
+#### /import-state-terminology
+**Import state-specific KRI/PLP terminology from CSV into portal**
+```bash
+python scripts/import_state_terminology.py -v
+```
+Reads state-terminology CSV, upserts `state_terminology` table (50 states), and seeds `terminology_map` with state + feature entries (e.g., ECAP→AZ, HSBP→WA, CCMR→TX as state mappings; all PLP/KRI acronyms as feature mappings).
+- Options: `--csv-path PATH` (default: ~/Desktop/inbound-generator/data/reports/state-pages/), `--force` (re-seed terminology_map), `--dry-run`
+- Source CSV: `inbound-generator/data/reports/state-pages/state-terminology-YYYY-MM-DD.csv`
+- Schedule: On-demand (when state-pages CSV is regenerated from inbound-generator)
+- Cost: Free (DB inserts only)
+
+#### /fetch-customer-stories
+**Pull Customer Stories from Webflow API and save to CSV**
+```bash
+python scripts/fetch_webflow_customer_stories.py -v
+```
+Fetches all published Customer Story items from Webflow resources collection, extracts fields (name, slug, district, state, quote, video URL, PDF URL), matches to `marketing_content` records by URL/title, and saves a local CSV.
+- Options: `--dry-run`, `--output PATH`, `--fields` (print raw Webflow field keys for debugging), `-v`
+- Output: `~/Desktop/inbound-generator/data/reports/customer-stories/customer-stories-YYYY-MM-DD.csv`
+- Run FIRST before `/enrich-customer-stories`
+- Schedule: On-demand (when new customer stories are published to Webflow)
+- Cost: Free (Webflow API reads only)
+
+#### /enrich-customer-stories
+**Enrich customer stories with AI-extracted quotes, proof points, and context**
+```bash
+python scripts/enrich_customer_stories.py -v
+```
+For each customer story: scrapes landing page, extracts YouTube transcript, reads PDF, synthesizes with gpt-5.2 to extract key quote, proof points, metrics, features used. Upserts `ai_context` (category=`customer_story`) and updates `marketing_content` with enhanced_summary + keywords.
+- Options: `--dry-run`, `--limit N`, `--force` (re-enrich), `--story SLUG`, `--csv-path PATH` (from fetch script), `-v`
+- Run after `/fetch-customer-stories` or standalone against DB records
+- Schedule: On-demand (after new customer stories are published or edited)
+- Cost: ~$0.05-0.10/story via gpt-5.2
+
 ### Agents (Multi-Step Orchestrators)
 
 Agents are multi-step workflows that orchestrate multiple scripts, run checks, make decisions, and provide actionable output.

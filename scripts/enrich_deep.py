@@ -95,6 +95,37 @@ def ensure_columns_exist(conn):
 
 
 # =============================================================================
+# State Terminology Helpers
+# =============================================================================
+
+def get_state_terminology(conn, state_code: str) -> Optional[Dict[str, str]]:
+    """
+    Fetch state-specific KRI and PLP terminology from the state_terminology table.
+    Returns a dict with state_name, kri_full, plp_full, or None if not found.
+    Silently returns None if the table doesn't exist yet (graceful fallback).
+    """
+    if not state_code or state_code in ('National', 'national', ''):
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT state_name, kri_full, plp_full FROM state_terminology WHERE state_code = %s",
+                (state_code.upper(),)
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    'state_name': row['state_name'],
+                    'kri_full': row['kri_full'],
+                    'plp_full': row['plp_full'],
+                }
+    except Exception:
+        # Table may not exist yet — fail silently
+        pass
+    return None
+
+
+# =============================================================================
 # Content Extraction Helpers
 # =============================================================================
 
@@ -231,8 +262,20 @@ def analyze_deep(
     existing_tags: str,
     existing_summary: str,
     extracted_text: str,
+    state_context: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Use advanced AI model for deep content analysis with weighted keywords."""
+
+    # Build state-specific context block when available
+    state_context_block = ''
+    if state_context:
+        state_context_block = f"""
+STATE-SPECIFIC CONTEXT (this content is specifically for {state_context['state_name']}):
+- State KRI terminology: {state_context['kri_full']}
+- State PLP terminology: {state_context['plp_full']}
+Include these state-specific acronyms in keywords (category: "state") if relevant to the content.
+IMPORTANT: Do NOT include KRI/PLP terminology from other states in the keywords.
+"""
 
     prompt = f"""Analyze this SchooLinks marketing content in depth and generate rich, structured metadata.
 
@@ -246,7 +289,7 @@ CONTENT DETAILS:
 - State: {state or 'National/Unknown'}
 - Existing Tags: {existing_tags or 'None'}
 - Existing Summary: {existing_summary or 'None'}
-
+{state_context_block}
 EXTRACTED TEXT (from the actual content):
 {extracted_text[:MAX_EXTRACTED_TEXT]}
 
@@ -374,6 +417,12 @@ def process_record(
     if verbose:
         print(f"    Extracted {len(extracted_text)} chars")
 
+    # Fetch state-specific terminology context for state-tagged content
+    record_state = record.get('state', '') or ''
+    state_ctx = get_state_terminology(conn, record_state)
+    if verbose and state_ctx:
+        print(f"    State context: {state_ctx['state_name']} — KRI={state_ctx['kri_full'][:40]}, PLP={state_ctx['plp_full'][:40]}")
+
     # Deep AI analysis
     print(f"    Analyzing with {model}...")
     analysis = analyze_deep(
@@ -381,10 +430,11 @@ def process_record(
         model=model,
         title=title,
         content_type=record.get('type', ''),
-        state=record.get('state', ''),
+        state=record_state,
         existing_tags=record.get('tags', ''),
         existing_summary=record.get('summary', ''),
         extracted_text=extracted_text,
+        state_context=state_ctx,
     )
 
     if 'error' in analysis:

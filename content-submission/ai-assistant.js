@@ -119,6 +119,39 @@ STATE DETECTION (CRITICAL - Do not default to National if a district is mentione
 - If a numbered district is mentioned (e.g., "District 155"), research or infer the state
 - NEVER default to "National" if ANY district, city, or school name is mentioned
 
+STATE TERMINOLOGY DETECTION (identify state from acronyms when no explicit state/city/district is mentioned):
+- ECAP / Education and Career Action Plan → AZ (Arizona)
+- CCRI (College and Career Readiness Indicator, Arizona-specific) → AZ
+- HSBP / High School and Beyond Plan → WA (Washington)
+- CCMR / College Career and Military Readiness → TX (Texas) — also add CCMR, PGP as tags
+- PGP / Personal Graduation Plan (when paired with CCMR or Texas context) → TX
+- PCCR / Plan for College and Career Readiness → UT (Utah)
+- SDMyLife → SD (South Dakota)
+- CCREWS / MN CCR Early Warning System → MN (Minnesota)
+- DSSF / Delaware School Success Framework → DE (Delaware)
+- Act 213 (South Carolina IGP law) → SC; also add IGP as tag
+- Act 158 / Chapter 339 (Pennsylvania CCR compliance) → PA
+- Choice Ready (framework) → ND (North Dakota)
+- Ready Graduate Indicator → TN (Tennessee)
+- HS.HECPS / Education Plans and Profiles → OR (Oregon); also add EPP as tag
+- WVCCRDSSS / WVAS → WV (West Virginia)
+- NSPF / Nevada School Performance Framework → NV (Nevada)
+- DSSF → DE (Delaware)
+- OGP / Ohio Graduation Plan (Ohio Means Jobs context) → OH; also add OGP as tag
+- EWIS / MyCaP (Massachusetts-specific) → MA
+- ILP (when Louisiana/LEAP 360 context) → LA; (when Rhode Island/RIDE context) → RI
+- ICCP (Individual College & Career Plans, Georgia context) → GA
+- TAGGING: When state-specific acronyms appear in content, include them as tags (e.g., ECAP, CCMR, HSBP, PCCR) since these are searchable feature terms
+
+CUSTOMER STORY CONTENT (when type is Customer Story):
+- Set district/organization name as a tag (e.g., "Austin ISD", "Clark County School District")
+- Include state code as a tag (e.g., "TX", "NV") — even though state is a separate field
+- Include SchooLinks feature names as tags (e.g., "Work-Based Learning", "CCMR", "PLP", "HSBP", "Course Planner")
+- Include outcome-related keywords as tags (e.g., "FAFSA completion", "graduation tracking", "KRI compliance")
+- Suggested tags always include: state code, district name slug, key feature(s) demonstrated
+- Summary should lead with: "[District Name] ([State]) uses SchooLinks to [key outcome/use case]"
+- Title should include the district name and the key value proposition
+
 SUMMARY GENERATION:
 - Generate clear, factual summaries (2-4 sentences)
 - Include: district/organization name, what they did with SchooLinks, key benefits

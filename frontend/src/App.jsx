@@ -662,6 +662,39 @@ function App() {
         }
       }
 
+      // Normalize the raw message for keyword detection (used throughout chat handler)
+      const chatQueryLower = message.toLowerCase();
+
+      // Fetch customer story context when the query is about proof points, quotes, districts, or examples
+      let customerStoryContext = null;
+      const csKeywords = ['customer story', 'case study', 'proof', 'quote', 'district',
+        'testimonial', 'proof point', 'success story', 'reference', 'example district',
+        'customer', 'case studies', 'customer stories'];
+      const isCustomerStoryQuery = csKeywords.some(kw => chatQueryLower.includes(kw));
+      if (isCustomerStoryQuery) {
+        try {
+          let csQuery = supabaseClient
+            .from('ai_context')
+            .select('title, content, subcategory, tags, source_url')
+            .eq('category', 'customer_story')
+            .eq('is_verified', true)
+            .limit(5);
+
+          // Narrow by state if detected
+          if (detectedStates.length > 0) {
+            csQuery = csQuery.contains('tags', detectedStates);
+          }
+
+          const { data: csData } = await csQuery;
+          if (csData && csData.length > 0) {
+            customerStoryContext = csData;
+            console.log('[Chat] Loaded customer story context:', csData.length, 'stories');
+          }
+        } catch (err) {
+          console.warn('[Chat] Error fetching customer story context:', err);
+        }
+      }
+
       // Build a search query to find relevant content
       let queryBuilder = supabaseClient
         .from('marketing_content')
@@ -669,7 +702,6 @@ function App() {
 
       // CONTENT TYPE DETECTION: Apply type filter if user is searching for a content type
       // This handles queries like "one pager", "case studies", "videos", etc.
-      const chatQueryLower = message.toLowerCase();
       const chatTypeDetection = {
         '1-Pager': ['one pager', 'one-pager', 'onepager', '1 pager', '1-pager', 'pager', 'fact sheet', 'factsheet', 'flyer', 'brochure', 'oen pager', 'on pager'],
         'Customer Story': ['case study', 'case-study', 'casestudy', 'customer story', 'success story', 'testimonial', 'customer stories', 'case studies'],
@@ -722,11 +754,19 @@ function App() {
         searchTerms.some(t => competitorNames.some(c => t.toLowerCase().includes(c))) ||
         competitorNames.some(c => chatQueryLower.includes(c));
 
-      if (chatDetectedTypes.length > 0 && !isCompetitorQuery) {
+      // Skip type filter for customer story queries when a state is detected:
+      // The customer story quotes/evidence already comes from ai_context (customerStoryContext).
+      // We want the full set of state content (videos, ebooks, clips, etc.) so the AI can
+      // recommend related assets alongside the customer story.
+      const isStateCustomerStoryQuery = isCustomerStoryQuery && detectedStates.length > 0;
+
+      if (chatDetectedTypes.length > 0 && !isCompetitorQuery && !isStateCustomerStoryQuery) {
         console.log('[Chat] Applying type filter with variations:', chatDetectedTypes);
         queryBuilder = queryBuilder.in('type', chatDetectedTypes);
       } else if (chatDetectedTypes.length > 0 && isCompetitorQuery) {
         console.log('[Chat] Skipping type filter for competitor query - showing all content types');
+      } else if (isStateCustomerStoryQuery) {
+        console.log('[Chat] Skipping type filter for state+customer story query - loading all state content for broader recommendations');
       }
 
       // IMPORTANT: Apply state filter FIRST if states were detected
@@ -802,6 +842,21 @@ function App() {
 
       let contentForContext = data || [];
 
+      // For state + customer story queries: remove content tagged with OTHER states.
+      // Keep the target state's content + untagged/generic content (Landing Pages, 1-Pagers, Ebooks).
+      // This prevents NJ/NV customer stories from appearing in AZ recommendations.
+      if (isStateCustomerStoryQuery && detectedStates.length > 0) {
+        const targetState = detectedStates[0].toUpperCase();
+        const stateFiltered = contentForContext.filter(item => {
+          const itemState = (item.state || '').trim().toUpperCase();
+          return !itemState || itemState === targetState;
+        });
+        if (stateFiltered.length >= 3) {
+          contentForContext = stateFiltered;
+          console.log(`[Chat] State+CS cross-filter: ${data?.length} → ${contentForContext.length} items (kept ${targetState} + untagged)`);
+        }
+      }
+
       // CRITICAL: Filter out wrong competitors when searching for a specific competitor
       // If searching for Xello, exclude ALL Naviance content (and vice versa)
       // Check BOTH searchTerms AND raw query text for reliability (NLP may omit competitor names)
@@ -871,6 +926,7 @@ function App() {
         contentForContext,
         {
           stateContext,
+          customerStoryContext,
           detectedStates,
           maxContentForContext: 100
         }

@@ -109,19 +109,63 @@ async function callOpenAIWithFallback(requestBody) {
 
 /**
  * State-specific context hints for enhanced AI prompts
- * Quick reference terms for each state's CCR requirements
+ * Explicit PLP name = / KRI name = format so AI always uses correct state term
+ * Source: state-terminology-2026-02-24.csv — covers all 50 states
+ *
+ * IMPORTANT FORMAT: "PLP name = X" and "KRI name = Y" so AI substitutes
+ * state-specific terms when users ask about PLP or KRI in a state context.
  */
 const STATE_CONTEXT_HINTS = {
-  'TX': 'Texas: CCMR indicators, HB 5 endorsements, HB 773 IBC requirements, PGP plans, TEA CCMR Tracker',
-  'CO': 'Colorado: ICAP (Individual Career & Academic Plan), MyColoradoJourney, QCPF',
-  'MI': 'Michigan: EDP (Education Development Plan), MME assessments, Sixty by 30',
-  'WI': 'Wisconsin: ACP (Academic & Career Planning), PI 26 requirements, WBL criteria',
-  'NE': 'Nebraska: CCR Ready framework, Personal Learning Plans, Perkins V',
-  'UT': 'Utah: PCCR indicators, First Credential initiative, HB260',
-  'FL': 'Florida: Scholar designation, graduation pathways, career academies',
-  'CA': 'California: College/Career Indicator (CCI), A-G requirements, CTE pathways',
-  'NY': 'New York: CDOS credential, graduation pathways, CTE endorsements',
-  'OH': 'Ohio: graduation seals, career passport, OhioMeansJobs readiness seal',
+  'AL': "Alabama — PLP name: Graduation Plan | KRI name: CCR (College Career Readiness) | Key topics: CCR indicator monitoring, work-based learning, alumni access",
+  'AK': "Alaska — PLP name: Personalized Learning Plans | KRI name: State and Graduation Requirements | Key topics: 4-6 year academic plans, FAFSA compliance",
+  'AZ': "Arizona — PLP name: ECAP (Education and Career Action Plan) | KRI name: CCRI (College and Career Readiness Indicator) | Key topics: graduation endorsements, course planner, CCRI compliance. In Arizona, always say ECAP not PLP.",
+  'AR': "Arkansas — PLP name: Graduation Plan | KRI name: CCR (College Career Readiness) | Key topics: graduation planning, work-based learning, alumni access",
+  'CA': "California — PLP name: A-G Aligned Plan | KRI name: CCI (College/Career Indicator) | Key topics: A-G requirements, CTE pathways, district-wide CCI Progress Dashboard, alumni outcomes",
+  'CO': "Colorado — PLP name: ICAP (Individual Career and Academic Plan) | KRI name: PWR (Postsecondary Workforce Readiness) | Key topics: MyColoradoJourney, QCPF, WBL, graduation requirements",
+  'CT': "Connecticut — PLP name: SSP (Student Success Plan) | KRI name: Required Public School Program of Study | Key topics: FAFSA support, student interest monitoring",
+  'DE': "Delaware — PLP name: Delaware Pathways Plans | KRI name: DSSF (Delaware School Success Framework) | Key topics: FAFSA resources, financial aid",
+  'FL': "Florida — PLP name: Graduation Plan | KRI name: Bright Futures Scholarship Tracking | Key topics: Bright Futures eligibility, GPA/test score/volunteer hour monitoring, Scholar designation, career academies",
+  'GA': "Georgia — PLP name: ICCP (Individual College & Career Plans) | KRI name: Top State for Talent Act / HB 192 (Career Advisement) | Key topics: GAfutures, Dual Enrollment, GA MATCH integration, grades 6-12 career advisement checklist",
+  'HI': "Hawaii — PLP name: PTP (Personal Transition Plan) | KRI name: CCR Tracking | Key topics: K-12 work-based learning history, financial aid resources",
+  'ID': "Idaho — PLP name: Personalized Learning Plans | KRI name: State and Graduation Requirements | Key topics: FAFSA compliance, graduation tracking",
+  'IL': "Illinois — PLP name: ILP (Individualized Learning Plan, via PaCE Framework) | KRI name: IL PWR / CCPE / ISBE CCRI | Key topics: Postsecondary Workforce and Readiness (PWR) Act, CCPE tracking, Career Pathway Endorsements on diplomas",
+  'IN': "Indiana — PLP name: Career and Academic Plan | KRI name: Roadmap for Student Success | Key topics: 6-year Course Planner, WBL, Pre-Apprenticeship programs",
+  'IA': "Iowa — PLP name: ICAP (Individual Career and Academic Plan) | KRI name: Iowa Career Readiness Standards | Key topics: Iowa-specific career data, 4-6 year course plans, ICAP activity tracking",
+  'KS': "Kansas — PLP name: IPS (Individual Plans of Study) | KRI name: KSDE Graduation Requirements | Key topics: Postsecondary Asset tracking dashboard, student interest monitoring",
+  'KY': "Kentucky — PLP name: ILP (Individual Learning Plan) | KRI name: CCR (College Career Readiness) | Key topics: Academic and Career Plan, graduation endorsements, digital approvals",
+  'LA': "Louisiana — PLP name: ILP (Individual Learning Plan) | KRI name: LEAP 360 | Key topics: LEAP 360 assessment tracking, FAFSA resources",
+  'ME': "Maine — PLP name: PLP (Personalized Learning Plan) | KRI name: CCR Anchor Standards | Key topics: K-12 indicator tracking, digital signatures, elementary through high school",
+  'MD': "Maryland — PLP name: CCR Plan | KRI name: MSDE State CCR / Blueprint for Maryland's Future | Key topics: Blueprint for the Future Pillar Three, Early Warning Indicators, 55% college enrollment goal",
+  'MA': "Massachusetts — PLP name: MyCaP (My Career and Academic Plan) | KRI name: EWIS (Early Warning Indicator System) | Key topics: MyCAP program, WBL hours monitoring, graduation benchmarks. In Massachusetts, always say MyCaP not PLP.",
+  'MI': "Michigan — PLP name: EDP (Education Development Plan) | KRI name: MME-Aligned CCR Indicators | Key topics: Talent Portfolios from 7th grade, CTE pathway tracking, Dual Credit, Michigan Career Development Model, Sixty by 30",
+  'MN': "Minnesota — PLP name: Personalized Learning Plans | KRI name: CCREWS (MN CCR Early Warning System) | Key topics: World's Best Workforce goal, FAFSA compliance, student interest monitoring",
+  'MS': "Mississippi — PLP name: ISP (Individual Success Plan) | KRI name: ACT WorkKeys | Key topics: ACT WorkKeys indicators, achievement history documentation",
+  'MO': "Missouri — PLP name: ICAP (Individual Career Academic Plan) | KRI name: MVA (Missouri Value-Added) / A+ | Key topics: MVA tracking, A+ program, WBL, CTE pathways, digital approvals",
+  'MT': "Montana — PLP name: ESSA State Plan | KRI name: CCR Indicator | Key topics: ESSA plan as living document, activity tracking, digital approvals",
+  'NE': "Nebraska — PLP name: Personal Learning Plans and Portfolios | KRI name: Nebraska Career Readiness Standards | Key topics: CCR Ready framework, Perkins V, electronic signatures for students and families",
+  'NV': "Nevada — PLP name: Career Planning and Placement Plan | KRI name: NSPF (Nevada School Performance Framework) | Key topics: NSPF tracking, financial aid resources",
+  'NH': "New Hampshire — PLP name: IPE (Individualized Employment Plans) | KRI name: Annual Performance Report | Key topics: Career Planning and Placement Plans, activity tracking, digital approvals",
+  'NJ': "New Jersey — PLP name: Graduation Plan | KRI name: Student Learning Standards for Career Readiness | Key topics: CCR tracking across all grades, FAFSA support",
+  'NM': "New Mexico — PLP name: Next Step Plan | KRI name: CCR (College Career Readiness) | Key topics: College and Career Readiness Bureau, state reporting, work-based learning",
+  'NY': "New York — PLP name: Graduation Plan | KRI name: CCR / Seals of Civic Readiness & Biliteracy | Key topics: Seal of Civic Readiness, Seal of Biliteracy, CDOS credential, CTE endorsements",
+  'NC': "North Carolina — PLP name: Career Planning and Placement Plans | KRI name: Student Readiness Indicator | Key topics: student interest monitoring, financial aid, digital approvals",
+  'ND': "North Dakota — PLP name: ESSA State Plan | KRI name: Choice Ready | Key topics: Choice Ready framework, student interest tracking, digital signatures",
+  'OH': "Ohio — PLP name: OGP (Ohio Graduation Plan) | KRI name: OGP / Ohio Means Jobs | Key topics: Career Connections Framework, Ohio Means Jobs readiness seal, College Readiness Seals, graduation seals, career passport",
+  'OK': "Oklahoma — PLP name: ICAP (Individual Career Academic Plan) | KRI name: CCR (College Career Readiness) | Key topics: postsecondary pathway awareness, WBL, industry partners",
+  'OR': "Oregon — PLP name: EPP (Education Plans and Profiles) | KRI name: HS.HECPS (High School Habits Experiences Competencies Plans for Success) | Key topics: Senate Bill 3 for Class of 2027, 14 HS.HECPS standards, CRLE, ORSAA compliance",
+  'PA': "Pennsylvania — PLP name: Career-Aligned Course Plan | KRI name: Act 158 / Chapter 339 | Key topics: Act 158 & Chapter 339 compliance, PIMS reporting, industry-based learning, FAFSA monitoring",
+  'RI': "Rhode Island — PLP name: ILP (Individual Learning Plan) | KRI name: RIDE ILP Framework / Performance-Based Diploma Assessment | Key topics: 21 required credits, CCR-Based Exams, Performance-Based Diploma Assessment, Pathway Endorsements",
+  'SC': "South Carolina — PLP name: IGP (Individual Graduation Plan) | KRI name: Act 213 / CCR | Key topics: Act 213 six IGP components, digital guardian signatures, SEL data integration",
+  'SD': "South Dakota — PLP name: SDMyLife | KRI name: SDMyLife | Key topics: WBL and Pathways Dashboard, Course Planning, Dual Credit tracking",
+  'TN': "Tennessee — PLP name: ESSA State Plan | KRI name: Ready Graduate Indicator | Key topics: dual credit monitoring, FAFSA resources, CCR standards compliance",
+  'TX': "Texas — PLP name: PGP (Personal Graduation Plan) | KRI name: CCMR (College Career and Military Readiness) | Key topics: HB 5 endorsements, HB 773 IBC requirements, TEA CCMR Tracker, TEA accountability. In Texas, always say CCMR not KRI and PGP not PLP.",
+  'UT': "Utah — PLP name: PCCR (Plan for College and Career Readiness) | KRI name: PCCR (Plan for College and Career Readiness) | Key topics: First Credential initiative, HB260, CTE pathway tracking, 7th grade through graduation",
+  'VT': "Vermont — PLP name: PLP / ACP (Academic and Career Plan) | KRI name: CCR (College Career Readiness) | Key topics: dual credit monitoring, digital approval workflows",
+  'VA': "Virginia — PLP name: ACP (Academic and Career Plan) | KRI name: Virginia CCR Initiative | Key topics: Capstone Course Content, endorsement planning, digital approvals",
+  'WA': "Washington — PLP name: HSBP (High School and Beyond Plan) | KRI name: HSBP (High School and Beyond Plan) | Key topics: statewide universal HSBP solution, career pathway alignment, dual credit, course planning. In Washington, always say HSBP not PLP.",
+  'WV': "West Virginia — PLP name: WVCCRDSSS (WV College Career Readiness Dispositions and Standards for Student Success) | KRI name: WVAS (WV Accountability System) | Key topics: auto-generated documents from student activities, career plan documentation",
+  'WI': "Wisconsin — PLP name: ACP (Academic and Career Plan) | KRI name: Wisconsin State CCR Indicators | Key topics: PI 26 requirements, Youth Apprenticeship, WBL/CTE Dashboard, 4-6 year course planning",
+  'WY': "Wyoming — PLP name: PGP (Personal Graduation Plan) | KRI name: CCR (College Career Readiness) | Key topics: course planning, living document with activity tracking",
 };
 
 /**
@@ -157,8 +201,8 @@ function detectQueryComplexity(query) {
     /\b(vs|versus|compared?\s+to|better\s+than|difference|alternative)\b/i,
     // Why/How questions about SchooLinks
     /\b(why\s+should|how\s+does\s+schoolinks|what\s+makes)\b/i,
-    // State legislation codes
-    /\b(hb\s*\d+|sb\s*\d+|ride\s+framework|ccmr|icap|ecap|pgp|ilp|hsbp)\b/i,
+    // State legislation codes and state-specific acronyms
+    /\b(hb\s*\d+|sb\s*\d+|act\s+\d+|chapter\s+339|ride\s+framework|ccmr|icap|ecap|pgp|ilp|hsbp|pccr|ccri|ccrews|sdmylife|dssf|wvccrdsss|wvas|hs\.hecps|epp|ogp|igp|ssp|ipe|ips|mycap|ewis|edp|ptp|iccp|cci|pwr|mva|leap\s+360|choice\s+ready|ready\s+graduate)\b/i,
     // ROI/business value with specifics
     /\b(roi|cost\s+savings?|time\s+savings?|efficiency|budget)\b.*\b(proof|evidence|data|numbers?)\b/i,
     // Multiple product features in one query
@@ -1219,6 +1263,7 @@ export async function processConversationalQuery(
   // Handle backwards compatibility: if options is a number, treat it as maxContentForContext
   const {
     stateContext = null,
+    customerStoryContext = null,
     detectedStates = [],
     maxContentForContext = 100
   } = typeof options === 'number' ? { maxContentForContext: options } : options;
@@ -1272,14 +1317,61 @@ For general questions: Use your SchooLinks knowledge to provide helpful context
     stateContextSection = `
 
 ## STATE-SPECIFIC CONTEXT FOR ${detectedStates.join(', ')}
-**IMPORTANT: Use this state-specific information when the user asks about ${detectedStates.join(' or ')} or related topics.**
+**CRITICAL: The user is asking about ${detectedStates.join(' or ')}. You MUST use the state-specific terminology below.**
 
-### Quick Reference (State Terminology):
+### State Terminology (PLP and KRI names for this state):
 ${stateHints || 'General state CCR requirements apply.'}
 
-${stateContext ? `### Detailed Context:\n${stateContext}` : ''}
+${stateContext ? `### Detailed State Context:\n${stateContext}` : ''}
 
-**INSTRUCTIONS:** Use state-specific terminology and prioritize state-relevant content in your recommendations.
+**TERMINOLOGY RULES (mandatory):**
+- When the user asks about "PLP", "personalized learning plan", or equivalent — answer using the state's specific PLP name shown above (e.g., ECAP for AZ, HSBP for WA, PGP for TX, CCMR for TX KRI).
+- When the user asks about "KRI" or "readiness indicators" — answer using the state's specific KRI name shown above.
+- NEVER give a generic PLP/KRI answer when a specific state is in scope. Always lead with the state-specific term and then explain what it means.
+- Example: For Arizona + "what is the PLP?" → answer should start "In Arizona, the state-mandated plan is called the ECAP (Education and Career Action Plan)..."
+
+---
+`;
+  }
+
+  // Build customer story evidence section when stories are available
+  let customerStorySection = '';
+  if (customerStoryContext && customerStoryContext.length > 0) {
+    // Use 3000 chars so the "Related Video Clips" section (at end of content) is included
+    const storiesText = customerStoryContext
+      .map(cs => `### ${cs.title}\n${(cs.content || '').substring(0, 3000)}`)
+      .join('\n\n---\n\n');
+
+    // Extract named related assets from the "Related Video Clips & Supporting Assets" sections.
+    // These are confirmed district-cluster assets that must all be recommended individually.
+    const clusterAssets = [];
+    customerStoryContext.forEach(cs => {
+      const content = cs.content || '';
+      const relatedMatch = content.match(/## Related Video Clips[\s\S]*?\n([\s\S]*?)(?=\n##|$)/);
+      if (relatedMatch) {
+        relatedMatch[1].split('\n').forEach(line => {
+          const titleMatch = line.match(/"([^"]+)"/);
+          if (titleMatch) clusterAssets.push(titleMatch[1]);
+        });
+      }
+    });
+
+    const clusterInstruction = clusterAssets.length > 0
+      ? `\n**DISTRICT ASSET CLUSTER — RECOMMEND EVERY ONE:**\nThe following assets are confirmed to exist in the database for this district. Include each as a separate recommendation card — do NOT skip any:\n${clusterAssets.map(t => `- "${t}"`).join('\n')}\n`
+      : '';
+
+    customerStorySection = `
+
+## CUSTOMER STORY EVIDENCE
+Use these real customer stories when the user asks for proof points, quotes, or district examples.
+
+${storiesText}
+${clusterInstruction}
+**INSTRUCTIONS:**
+- Surface specific quotes and metrics from the evidence above. Always cite the district name. Do not fabricate.
+- LEAD recommendations with the main customer story landing page, then list EVERY asset from the DISTRICT ASSET CLUSTER above as individual cards. These are all part of the same story — a rep needs the whole toolkit.
+- After the district cluster, add supporting generic content (1-pagers, ebooks, landing pages) relevant to the topics discussed.
+- Do NOT recommend content from other states when the user asked about a specific state.
 
 ---
 `;
@@ -1319,6 +1411,7 @@ ${stateContext ? `### Detailed Context:\n${stateContext}` : ''}
 ${SCHOOLINKS_CONTEXT}
 ${terminologyContext ? `\n${terminologyContext}\n` : ''}
 ${stateContextSection}
+${customerStorySection}
 ${questionSystemPrompt}
 AVAILABLE CONTENT IN DATABASE:
 ${contentSummary}
@@ -1366,6 +1459,7 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
 - Match recommendations to the user's specific intent
 - An empty array [] is ONLY acceptable if the AVAILABLE CONTENT IN DATABASE section above is completely empty
 - VARIETY: Include different content types (videos, ebooks, customer stories, landing pages) when available
+- For customer story + state queries: ALWAYS recommend the customer story PLUS supporting assets (video clips, ebooks, webinars, blog posts) from the same state or covering the same topics — a sales rep needs a full toolkit, not just one asset
 - LOOK at the content list above and pick items that relate to the query
 
 IMPORTANT RULES:
