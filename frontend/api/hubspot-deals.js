@@ -120,9 +120,14 @@ async function getCompany(apiKey, companyId) {
 
 async function getContact(apiKey, contactId) {
   try {
+    const props = [
+      'firstname', 'lastname', 'email',
+      'message', 'hs_content_membership_notes',
+      'notes_last_contacted', 'your_message', 'demo_notes', 'comments_or_questions',
+    ].join(',');
     const data = await hubspotFetch(
       apiKey,
-      `/crm/v3/objects/contacts/${contactId}?properties=firstname,lastname,email,message,hs_content_membership_notes`
+      `/crm/v3/objects/contacts/${contactId}?properties=${props}`
     );
     return data.properties || {};
   } catch {
@@ -140,6 +145,57 @@ async function getOwnerName(apiKey, ownerId) {
   }
 }
 
+async function getContactNotes(apiKey, contactId) {
+  try {
+    const assoc = await hubspotFetch(
+      apiKey,
+      `/crm/v3/objects/contacts/${contactId}/associations/notes`
+    );
+    const noteIds = (assoc.results || []).map(r => r.id).slice(0, 3);
+    if (noteIds.length === 0) return null;
+
+    const notes = await Promise.all(
+      noteIds.map(id =>
+        hubspotFetch(apiKey, `/crm/v3/objects/notes/${id}?properties=hs_note_body,hs_timestamp`)
+          .then(n => n.properties || {})
+          .catch(() => null)
+      )
+    );
+    const bodies = notes
+      .filter(Boolean)
+      .filter(n => n.hs_note_body)
+      .sort((a, b) => new Date(b.hs_timestamp || 0) - new Date(a.hs_timestamp || 0))
+      .map(n => n.hs_note_body)
+      .join('\n---\n');
+    return bodies || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getFormSubmissionNotes(apiKey, contactId) {
+  try {
+    const data = await hubspotFetch(
+      apiKey,
+      `/marketing/v3/forms/submissions/contacts/${contactId}?limit=3`
+    );
+    const submissions = data.results || [];
+    if (submissions.length === 0) return null;
+
+    const latest = submissions[0];
+    const TEXT_FIELD_KEYWORDS = ['message', 'notes', 'your_message', 'demo_notes',
+      'comments_or_questions', 'what_brings_you', 'how_can_we_help'];
+    const fieldValues = (latest.values || [])
+      .filter(v => TEXT_FIELD_KEYWORDS.some(k => v.name?.toLowerCase().includes(k)))
+      .map(v => v.value)
+      .filter(Boolean)
+      .join('\n');
+    return fieldValues || null;
+  } catch {
+    return null;
+  }
+}
+
 async function enrichDeal(apiKey, deal, stageId) {
   const props = deal.properties || {};
   const dateEnteredProp = `hs_date_entered_${stageId}`;
@@ -151,18 +207,39 @@ async function enrichDeal(apiKey, deal, stageId) {
     getAssociationIds(apiKey, deal.id, 'meetings'),
   ]);
 
-  // Fetch company + contact details in parallel
-  const [company, contact, ownerName] = await Promise.all([
+  // Fetch company, contact, owner, and notes in parallel
+  const [company, contact, ownerName, contactNotes, formNotes] = await Promise.all([
     companyIds[0] ? getCompany(apiKey, companyIds[0]) : Promise.resolve({}),
     contactIds[0] ? getContact(apiKey, contactIds[0]) : Promise.resolve({}),
     getOwnerName(apiKey, props.hubspot_owner_id),
+    contactIds[0] ? getContactNotes(apiKey, contactIds[0]) : Promise.resolve(null),
+    contactIds[0] ? getFormSubmissionNotes(apiKey, contactIds[0]) : Promise.resolve(null),
   ]);
 
   const acv = props.acv ? parseFloat(props.acv) : null;
   const enrollment = company.enrollment ? parseInt(company.enrollment, 10) : null;
   const contactName = [contact.firstname, contact.lastname].filter(Boolean).join(' ') || null;
-  // Demo form notes: check "message" property first (common form field), then membership notes
-  const demoFormNotes = contact.message || contact.hs_content_membership_notes || null;
+
+  // Demo form notes: try contact properties first, then form submissions, then CRM notes
+  const demoFormNotes =
+    contact.message ||
+    contact.hs_content_membership_notes ||
+    contact.your_message ||
+    contact.demo_notes ||
+    contact.comments_or_questions ||
+    formNotes ||
+    contactNotes ||
+    null;
+
+  const notesSource = contact.message ? 'contact.message'
+    : contact.hs_content_membership_notes ? 'hs_content_membership_notes'
+    : contact.your_message ? 'contact.your_message'
+    : contact.demo_notes ? 'contact.demo_notes'
+    : contact.comments_or_questions ? 'contact.comments_or_questions'
+    : formNotes ? 'form_submission'
+    : contactNotes ? 'crm_notes'
+    : 'none';
+  console.log(`[hubspot-deals] deal ${deal.id} notes source: ${notesSource}`);
 
   return {
     id: deal.id,

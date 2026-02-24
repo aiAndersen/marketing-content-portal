@@ -130,23 +130,27 @@ function InboundDealCard({ deal, onClick }) {
       )}
 
       <div className="inbound-card-meta">
-        {deal.acv != null && (
-          <span className="inbound-acv">
-            ACV: {formatCurrency(deal.acv)}
-          </span>
-        )}
-        {deal.enrollment != null && (
-          <span className="inbound-enrollment">
-            {'\u00b7'} {deal.enrollment.toLocaleString()} students
+        <span className="inbound-acv">
+          ACV: {deal.acv != null ? formatCurrency(deal.acv) : '—'}
+        </span>
+        <span className="inbound-enrollment">
+          {'\u00b7'} {deal.enrollment != null ? deal.enrollment.toLocaleString() + ' students' : '— students'}
+        </span>
+      </div>
+
+      {deal.ownerName && (
+        <div className="inbound-card-owner">Owner: {deal.ownerName}</div>
+      )}
+
+      <div className="inbound-card-age">
+        Entered Sales Validating:{' '}
+        {daysAgo === null ? '—' : daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo}d ago`}
+        {deal.dateEnteredStage && (
+          <span className="inbound-card-age-date">
+            {' \u00b7 '}{new Date(deal.dateEnteredStage).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
         )}
       </div>
-
-      {daysAgo !== null && (
-        <div className="inbound-card-age">
-          Entered stage {daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`}
-        </div>
-      )}
 
       <div className="inbound-card-actions">
         <button className="inbound-action-btn">

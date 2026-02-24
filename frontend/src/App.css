@@ -3467,6 +3467,16 @@ body {
   margin-top: 2px;
 }
 
+.inbound-card-owner {
+  font-size: 0.72rem;
+  color: var(--sl-gray-500);
+  margin-top: 2px;
+}
+
+.inbound-card-age-date {
+  color: var(--sl-gray-400);
+}
+
 .inbound-card-actions {
   margin-top: auto;
   padding-top: var(--spacing-sm);
