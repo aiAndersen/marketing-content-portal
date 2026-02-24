@@ -65,7 +65,7 @@ async function searchDeals(apiKey, stageId) {
       {
         filters: [
           { propertyName: 'dealstage', operator: 'EQ', value: stageId },
-          { propertyName: dateEnteredProp, operator: 'GTE', value: String(sevenDaysAgo) },
+          { propertyName: 'createdate', operator: 'GTE', value: String(sevenDaysAgo) },
           { propertyName: 'lead_source', operator: 'EQ', value: 'Inbound' },
         ],
       },
@@ -81,7 +81,7 @@ async function searchDeals(apiKey, stageId) {
       'createdate',
       'closedate',
     ],
-    sorts: [{ propertyName: dateEnteredProp, direction: 'DESCENDING' }],
+    sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }],
     limit: DEAL_LIMIT,
   };
 
