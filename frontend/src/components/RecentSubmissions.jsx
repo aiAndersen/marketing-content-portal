@@ -10,7 +10,7 @@ import { supabaseClient } from '../services/supabase';
 function RecentSubmissions() {
   const [recentContent, setRecentContent] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {

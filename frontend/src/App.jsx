@@ -4,6 +4,7 @@ import { supabaseClient } from './services/supabase';
 import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
 import ChatInterface from './components/ChatInterface';
 import RecentSubmissions from './components/RecentSubmissions';
+import InboundDeals from './components/InboundDeals';
 import WeeklyGTMReport from './components/WeeklyGTMReport';
 // Lazy load TerminologyAdmin to prevent cascade failures if terminology tables don't exist
 const TerminologyAdmin = lazy(() => import('./components/TerminologyAdmin'));
@@ -1147,6 +1148,9 @@ function App() {
       <main className="main">
         {/* Recent Submissions Panel */}
         <RecentSubmissions />
+
+        {/* Inbound Deals Panel - HubSpot CRM inbounds last 7 days */}
+        <InboundDeals />
 
         <div className="search-container">
           {/* Mode Toggle */}
