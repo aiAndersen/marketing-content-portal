@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { Search, Database, Filter, Download, ExternalLink, Loader2, Sparkles, MessageSquare, ChevronDown, Brain, ArrowLeft, BarChart3 } from 'lucide-react';
+import { Search, Download, ExternalLink, Loader2, Sparkles, ChevronDown, Brain, ArrowLeft } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
 import ChatInterface from './components/ChatInterface';
 import RecentSubmissions from './components/RecentSubmissions';
 import WeeklyGTMReport from './components/WeeklyGTMReport';
+import AppHeader from './components/AppHeader';
+import Sidebar from './components/Sidebar';
+import BottomTabBar from './components/BottomTabBar';
+import { useDeviceLayout } from './hooks/useDeviceLayout';
 // Lazy load TerminologyAdmin to prevent cascade failures if terminology tables don't exist
 const TerminologyAdmin = lazy(() => import('./components/TerminologyAdmin'));
 import './App.css';
@@ -31,6 +35,22 @@ function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const firstRenderRef = useRef(true);
   const resultsRef = useRef(null);
+
+  // Device layout detection (mobile / tablet / desktop / wide)
+  const { isMobile, isWide } = useDeviceLayout();
+
+  // Sidebar collapsed state — persisted across sessions
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('sidebarCollapsed') === 'true'
+  );
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('sidebarCollapsed', String(next));
+      return next;
+    });
+  };
 
   // Check URL hash for admin mode
   useEffect(() => {
@@ -1104,6 +1124,16 @@ function App() {
     setConversationHistory([]);
   };
 
+  const handleNavigate = (mode) => {
+    setViewMode(mode);
+    if (window.heap) window.heap.track('Mode Toggled', { mode });
+  };
+
+  const handleAdminToggle = () => {
+    const next = !isAdminMode;
+    window.location.hash = next ? '#admin' : '';
+  };
+
   const exportToCSV = () => {
     if (results.length === 0) return;
 
@@ -1142,103 +1172,63 @@ function App() {
   // Render admin interface when in admin mode
   if (isAdminMode) {
     return (
-      <div className="app">
-        <header className="header">
-          <div className="header-content">
-            <div className="header-title">
-              <button
-                className="back-btn"
-                onClick={() => { window.location.hash = ''; }}
-                title="Back to Search"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              <Brain size={32} />
-              <div>
-                <h1>Terminology Brain Admin</h1>
-                <p>Manage AI Search vocabulary mappings</p>
+      <div className={`app-shell${isMobile ? ' is-mobile' : ' is-desktop'}${isWide ? ' is-wide' : ''}`}>
+        {!isMobile && (
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            viewMode={viewMode}
+            onNavigate={handleNavigate}
+            onToggle={toggleSidebar}
+            isAdminMode={isAdminMode}
+            onAdminToggle={handleAdminToggle}
+          />
+        )}
+        <div className="main-panel">
+          <header className="app-header app-header--admin">
+            <div className="app-header-inner">
+              <div className="admin-header-title">
+                <button
+                  className="back-btn"
+                  onClick={() => { window.location.hash = ''; }}
+                  title="Back to portal"
+                >
+                  <ArrowLeft size={18} />
+                  <span>Back</span>
+                </button>
+                <Brain size={22} />
+                <span>Terminology Brain Admin</span>
               </div>
             </div>
-          </div>
-        </header>
-        <main className="main" style={{ padding: '0' }}>
-          <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}><Loader2 className="animate-spin" /> Loading admin...</div>}>
-            <TerminologyAdmin />
-          </Suspense>
-        </main>
+          </header>
+          <main className="main" style={{ padding: '0' }}>
+            <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}><Loader2 className="animate-spin" /> Loading admin...</div>}>
+              <TerminologyAdmin />
+            </Suspense>
+          </main>
+        </div>
+        {isMobile && <BottomTabBar viewMode={viewMode} onNavigate={handleNavigate} />}
       </div>
     );
   }
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-content">
-          <div className="header-title">
-            <Database size={32} />
-            <div>
-              <h1>Marketing Content Portal</h1>
-              <p>AI-driven search across all SchooLinks marketing content</p>
-            </div>
-          </div>
-          {stats && (
-            <div className="stats">
-              <div className="stat-item">
-                <span className="stat-value">{stats.total_content}</span>
-                <span className="stat-label">Total Content</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-value">{stats.content_types}</span>
-                <span className="stat-label">Content Types</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-value">{stats.states_covered}</span>
-                <span className="stat-label">States</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
+    <div className={`app-shell${isMobile ? ' is-mobile' : ' is-desktop'}${isWide ? ' is-wide' : ''}`}>
+      {!isMobile && (
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          viewMode={viewMode}
+          onNavigate={handleNavigate}
+          onToggle={toggleSidebar}
+          isAdminMode={isAdminMode}
+          onAdminToggle={handleAdminToggle}
+        />
+      )}
 
-      <main className="main">
-        {/* Recent Submissions Panel */}
-        <RecentSubmissions />
+      <div className="main-panel">
+        <AppHeader isMobile={isMobile} stats={stats} viewMode={viewMode} />
 
-<div className="search-container">
-          {/* Mode Toggle */}
-          <div className="search-mode-toggle">
-            <button
-              className={`search-mode-btn ${viewMode === 'chat' ? 'active' : ''}`}
-              onClick={() => {
-                setViewMode('chat');
-                if (window.heap) window.heap.track('Mode Toggled', { mode: 'chat' });
-              }}
-            >
-              <MessageSquare size={16} />
-              Chat Assistant
-            </button>
-            <button
-              className={`search-mode-btn ${viewMode === 'search' ? 'active' : ''}`}
-              onClick={() => {
-                setViewMode('search');
-                if (window.heap) window.heap.track('Mode Toggled', { mode: 'search' });
-              }}
-            >
-              <Search size={16} />
-              Quick Search
-            </button>
-            <button
-              className={`search-mode-btn ${viewMode === 'gtm' ? 'active' : ''}`}
-              onClick={() => {
-                setViewMode('gtm');
-                if (window.heap) window.heap.track('Mode Toggled', { mode: 'gtm' });
-              }}
-            >
-              <BarChart3 size={16} />
-              Weekly GTM Report
-            </button>
-          </div>
-
+        <main className="main">
+          <div className="search-container">
           {/* Chat Interface */}
           {viewMode === 'chat' && (
             <ChatInterface
@@ -1560,7 +1550,16 @@ function App() {
           )}
         </div>
         )}
-      </main>
+        </main>
+      </div>
+
+      {isWide && (
+        <div className="context-panel">
+          <RecentSubmissions />
+        </div>
+      )}
+
+      {isMobile && <BottomTabBar viewMode={viewMode} onNavigate={handleNavigate} />}
     </div>
   );
 }
