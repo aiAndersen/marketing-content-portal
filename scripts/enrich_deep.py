@@ -48,6 +48,13 @@ try:
 except ImportError:
     YOUTUBE_API_AVAILABLE = False
 
+# Optional yt-dlp for metadata fallback (Shorts without captions)
+try:
+    import yt_dlp
+    YTDLP_AVAILABLE = True
+except ImportError:
+    YTDLP_AVAILABLE = False
+
 # Optional PDF extraction
 try:
     from PyPDF2 import PdfReader
@@ -237,11 +244,66 @@ def extract_webpage_text(url: str) -> Optional[str]:
         return None
 
 
+def extract_youtube_metadata_ytdlp(url: str) -> Optional[str]:
+    """
+    Fallback for YouTube Shorts without captions.
+    Uses yt-dlp to pull title, description, hashtags, and creator tags —
+    enough context for the AI to generate a meaningful summary.
+    """
+    if not YTDLP_AVAILABLE:
+        return None
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+            'noplaylist': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        if not info:
+            return None
+
+        description = info.get('description') or ''
+        tags = info.get('tags') or []
+        categories = info.get('categories') or []
+        hashtags = re.findall(r'#\w+', description)
+        duration = info.get('duration') or 0
+
+        parts = []
+        parts.append(f"Title: {info.get('title', '')}")
+        if duration:
+            parts.append(f"Duration: {duration}s")
+        if categories:
+            parts.append(f"Category: {', '.join(categories)}")
+        if tags:
+            parts.append(f"Creator tags: {', '.join(tags[:20])}")
+        if hashtags:
+            parts.append(f"Hashtags: {' '.join(hashtags[:15])}")
+        if description:
+            # Strip redundant hashtag block often appended at the end
+            clean_desc = re.sub(r'\n+#\S+(\s+#\S+)*\s*$', '', description).strip()
+            if clean_desc:
+                parts.append(f"Description: {clean_desc[:2000]}")
+
+        result = '\n'.join(parts)
+        return result if len(result) > 50 else None
+
+    except Exception as e:
+        print(f"      yt-dlp metadata error: {type(e).__name__}: {e}")
+        return None
+
+
 def extract_content(url: str) -> Optional[str]:
     """Extract text content from any URL type."""
     url_type = detect_content_type(url)
     if url_type == 'youtube':
-        return extract_youtube_transcript(url)
+        # Try transcript first; fall back to yt-dlp metadata for captionless Shorts
+        content = extract_youtube_transcript(url)
+        if not content or len(content) < 50:
+            content = extract_youtube_metadata_ytdlp(url)
+        return content
     elif url_type == 'pdf':
         return extract_pdf_text(url)
     elif url_type in ('webpage', 'hubspot', 'google_doc'):
@@ -533,11 +595,20 @@ def main():
     parser.add_argument('--model', default=DEFAULT_MODEL, help=f'AI model to use (default: {DEFAULT_MODEL})')
     parser.add_argument('--dry-run', action='store_true', help='Preview without making changes')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
+    parser.add_argument('--type', dest='content_type', help='Filter by content type (e.g. "Video Clip", "Video", "Blog")')
+    parser.add_argument('--state', dest='state_filter', help='Filter by state code (e.g. IN, TX)')
+    parser.add_argument('--url-contains', dest='url_contains', help='Filter records where live_link contains this substring (e.g. "youtu.be", "vimeo")')
     args = parser.parse_args()
 
     print("=" * 60)
     print("Deep Content Enrichment Pipeline")
     print(f"Model: {args.model}")
+    if args.content_type:
+        print(f"Type filter: {args.content_type}")
+    if args.state_filter:
+        print(f"State filter: {args.state_filter}")
+    if args.url_contains:
+        print(f"URL filter: *{args.url_contains}*")
     print("=" * 60)
 
     if not DATABASE_URL:
@@ -564,24 +635,35 @@ def main():
     # Fetch records
     print("[3/4] Fetching content records...")
     with conn.cursor() as cur:
-        if args.force:
-            query = """
-                SELECT * FROM marketing_content
-                WHERE live_link IS NOT NULL OR ungated_link IS NOT NULL
-                ORDER BY created_at DESC
-            """
-        else:
-            query = """
-                SELECT * FROM marketing_content
-                WHERE (live_link IS NOT NULL OR ungated_link IS NOT NULL)
-                  AND deep_enriched_at IS NULL
-                ORDER BY created_at DESC
-            """
+        params = []
+        where_clauses = ["(live_link IS NOT NULL OR ungated_link IS NOT NULL)"]
+
+        if not args.force:
+            where_clauses.append("deep_enriched_at IS NULL")
+
+        if args.content_type:
+            where_clauses.append("type = %s")
+            params.append(args.content_type)
+
+        if args.state_filter:
+            where_clauses.append("state = %s")
+            params.append(args.state_filter)
+
+        if args.url_contains:
+            where_clauses.append("(live_link ILIKE %s OR ungated_link ILIKE %s)")
+            params.append(f'%{args.url_contains}%')
+            params.append(f'%{args.url_contains}%')
+
+        query = f"""
+            SELECT * FROM marketing_content
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY created_at DESC
+        """
 
         if args.limit:
             query += f" LIMIT {args.limit}"
 
-        cur.execute(query)
+        cur.execute(query, params if params else None)
         records = cur.fetchall()
 
     print(f"  Found {len(records)} records to process")
