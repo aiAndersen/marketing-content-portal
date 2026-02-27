@@ -176,6 +176,27 @@ vercel redeploy <deployment-url> --no-wait
 ```
 > Always use the Vercel CLI (not the dashboard) to manage env vars so changes are repeatable and documented here.
 
+## ⚠️ Deployment Rules — STRICTLY ENFORCED
+
+**NEVER push to `main` branch without explicit user approval.**
+
+- All work happens on the `staging` branch
+- Use `git push origin staging` only
+- Only push to `main` when the user explicitly says "push to main", "deploy to production", or similar
+- Merging staging → main requires the user to say so directly
+- Violating this caused a production incident — do not repeat it
+
+Correct staging push:
+```bash
+git push origin staging
+```
+
+NEVER run these without explicit user instruction:
+```bash
+git push origin main     # ← FORBIDDEN without approval
+git checkout main && git merge staging && git push origin main  # ← FORBIDDEN
+```
+
 ## Gotchas
 
 1. **Content submission is vanilla JS** - No imports/exports, no React
@@ -184,6 +205,7 @@ vercel redeploy <deployment-url> --no-wait
 4. **Video Clip vs Video** - Clips are short snippets (YouTube Shorts)
 5. **1-Pager includes** - Fact sheets, flyers, brochures, infographics
 6. **Terminology service has fallback mappings** - Works without database
+7. **gpt-5.x models**: Use `max_completion_tokens` NOT `max_tokens`; do NOT pass `temperature` — the `/api/openai` proxy handles this, but nlp.js must not pass conflicting params
 
 ## Self-Improvement Agent
 

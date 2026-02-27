@@ -1530,6 +1530,14 @@ IMPORTANT RULES:
     const content = data.choices[0]?.message?.content;
 
     if (!content) {
+      // Diagnostic: log the full raw API response so we can see why content is null
+      console.error('[Chat] NULL content from API. Full response:', JSON.stringify({
+        status: response.status,
+        choices: data.choices,
+        error: data.error,
+        model: data.model,
+        finish_reason: data.choices?.[0]?.finish_reason
+      }).substring(0, 800));
       return {
         response: "I couldn't process your request. Please try again.",
         recommendations: []
