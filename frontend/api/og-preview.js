@@ -6,7 +6,7 @@
  *
  * Usage: GET /api/og-preview?url=https://example.com/page
  */
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { url } = req.query;
 
   if (!url) {
