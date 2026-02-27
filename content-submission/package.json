@@ -1,8 +1,14 @@
 {
   "name": "content-submission",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "node build-config.js",
     "start": "npx serve -l 3001"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
   }
 }

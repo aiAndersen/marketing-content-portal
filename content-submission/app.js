@@ -1132,14 +1132,29 @@ async function searchContent() {
       .from('marketing_content')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
 
     if (typeFilter) {
       query = query.eq('type', typeFilter);
     }
 
     if (searchInput) {
-      query = query.or(`title.ilike.%${searchInput}%,tags.ilike.%${searchInput}%,summary.ilike.%${searchInput}%`);
+      // Split multi-word queries into individual terms and search across all enriched columns
+      const terms = searchInput.split(/\s+/).filter(Boolean);
+      const searchConditions = terms.flatMap(term => {
+        const t = term.toLowerCase();
+        return [
+          `title.ilike.%${t}%`,
+          `summary.ilike.%${t}%`,
+          `enhanced_summary.ilike.%${t}%`,
+          `tags.ilike.%${t}%`,
+          `auto_tags.ilike.%${t}%`,
+          `extracted_text.ilike.%${t}%`,
+          `state.ilike.%${t}%`,
+          `type.ilike.%${t}%`
+        ];
+      });
+      query = query.or(searchConditions.join(','));
     }
 
     const { data, error } = await query;

@@ -731,17 +731,23 @@ function App() {
       }
 
       // Backup detection from query text (add variations)
-      for (const [contentType, terms] of Object.entries(chatTypeDetection)) {
-        for (const term of terms) {
-          if (chatQueryLower.includes(term)) {
-            const variations = chatTypeVariations[contentType] || [contentType];
-            for (const variant of variations) {
-              if (!chatDetectedTypes.includes(variant)) {
-                chatDetectedTypes.push(variant);
+      // Skip when user says "anything/everything" (wants all types),
+      // or when AI returned no types and intent is state-focused (trust AI over keyword match)
+      const hasAllTypesLanguage = /\b(anything|everything|all types|any type|all content|any content|whatever)\b/.test(chatQueryLower);
+      const isStateOnlySearch = primaryIntent === 'state' && (aiParams.types || []).length === 0;
+      if (!hasAllTypesLanguage && !isStateOnlySearch) {
+        for (const [contentType, terms] of Object.entries(chatTypeDetection)) {
+          for (const term of terms) {
+            if (chatQueryLower.includes(term)) {
+              const variations = chatTypeVariations[contentType] || [contentType];
+              for (const variant of variations) {
+                if (!chatDetectedTypes.includes(variant)) {
+                  chatDetectedTypes.push(variant);
+                }
               }
+              console.log(`[Chat] Backup type detection: "${term}" → ${variations.join(', ')}`);
+              break;
             }
-            console.log(`[Chat] Backup type detection: "${term}" → ${variations.join(', ')}`);
-            break;
           }
         }
       }
