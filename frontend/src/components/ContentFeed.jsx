@@ -129,14 +129,22 @@ function GradientThumb({ contentType }) {
   );
 }
 
+/** Returns true if a URL points directly to a PDF file */
+function isPdfUrl(url) {
+  if (!url) return false;
+  return /\.pdf(\?|$)/i.test(url);
+}
+
 /** Renders the right thumbnail for a card */
 function CardThumb({ item }) {
   const primaryUrl = item.live_link || item.ungated_link;
   const thumb = extractThumbnailSync(primaryUrl);
 
   if (!thumb) {
-    // Try og:image proxy for non-video content
-    if (primaryUrl) return <OgThumb url={primaryUrl} contentType={item.type} />;
+    // For OG proxy: only use live_link (landing pages have og:image).
+    // Skip OG proxy for PDFs — they have no HTML meta tags and always return null.
+    const ogUrl = item.live_link && !isPdfUrl(item.live_link) ? item.live_link : null;
+    if (ogUrl) return <OgThumb url={ogUrl} contentType={item.type} />;
     return <GradientThumb contentType={item.type} />;
   }
 

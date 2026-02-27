@@ -140,7 +140,6 @@ python ai_context_manager.py list   # View AI context
 ### Backend/Scripts
 - `OPENAI_API_KEY` - OpenAI API key (server-side only)
 - `DATABASE_URL` - Direct PostgreSQL connection string
-- `HUBSPOT_API_KEY` - HubSpot Private App token (server-side only, used by `/api/hubspot-deals` serverless function)
 
 ### Managing Vercel Environment Variables (use CLI)
 
@@ -206,6 +205,7 @@ git checkout main && git merge staging && git push origin main  # ← FORBIDDEN
 5. **1-Pager includes** - Fact sheets, flyers, brochures, infographics
 6. **Terminology service has fallback mappings** - Works without database
 7. **gpt-5.x models**: Use `max_completion_tokens` NOT `max_tokens`; do NOT pass `temperature` — the `/api/openai` proxy handles this, but nlp.js must not pass conflicting params
+8. **HubSpot Deals RETIRED AND DELETED** — `InboundDeals.jsx`, `InboundDealModal.jsx`, and `frontend/api/hubspot-deals.js` have been removed. Do not re-implement. The `HUBSPOT_API_KEY` env var is no longer used by this project.
 
 ## Self-Improvement Agent
 

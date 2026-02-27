@@ -2,7 +2,7 @@
  * og-preview.js — Vercel serverless function
  * Fetches Open Graph image from an external URL (bypasses CORS).
  * Returns: { image: string|null }
- * Cached 24hr at Vercel edge (s-maxage=86400).
+ * Cached 24hr at Vercel edge when image found; 5min when not found.
  *
  * Usage: GET /api/og-preview?url=https://example.com/page
  */
@@ -35,14 +35,15 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
+      res.setHeader('Cache-Control', 's-maxage=300');
       return res.status(200).json({ image: null });
     }
 
-    // Only read first 50KB to find OG tags without loading full page
+    // Read first 100KB to find OG tags without loading full page
     const reader = response.body.getReader();
     const chunks = [];
     let totalBytes = 0;
-    const maxBytes = 50 * 1024;
+    const maxBytes = 100 * 1024;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -68,13 +69,25 @@ export default async function handler(req, res) {
       html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
 
-    const image = ogImageMatch ? ogImageMatch[1] : null;
+    // Fallback: twitter:image (used by many pages that omit og:image)
+    const twitterImageMatch = !ogImageMatch && (
+      html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)
+    );
 
-    // Cache at Vercel edge for 24 hours
-    res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600');
+    const image = ogImageMatch ? ogImageMatch[1] : (twitterImageMatch ? twitterImageMatch[1] : null);
+
+    // Only cache at edge for 24 hours when an image was found.
+    // Null results get a short 5-minute TTL so they can retry quickly.
+    if (image) {
+      res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600');
+    } else {
+      res.setHeader('Cache-Control', 's-maxage=300');
+    }
     return res.status(200).json({ image });
   } catch {
-    // Timeouts, network errors, etc — return null gracefully
+    // Timeouts, network errors, etc — return null gracefully (short cache)
+    res.setHeader('Cache-Control', 's-maxage=300');
     return res.status(200).json({ image: null });
   }
 }
