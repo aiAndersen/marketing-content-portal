@@ -129,6 +129,25 @@ function GradientThumb({ contentType }) {
   );
 }
 
+/**
+ * Renders the top portion of a PDF as a thumbnail using a scaled iframe.
+ * The gradient shows while the iframe loads, then fades out once ready.
+ */
+function PdfThumb({ pdfUrl, contentType }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="feed-card-thumb-pdf">
+      <GradientThumb contentType={contentType} />
+      <iframe
+        src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+        className={`feed-card-pdf-iframe${loaded ? ' is-loaded' : ''}`}
+        onLoad={() => setLoaded(true)}
+        title="PDF preview"
+      />
+    </div>
+  );
+}
+
 /** Returns true if a URL points directly to a PDF file */
 function isPdfUrl(url) {
   if (!url) return false;
@@ -137,28 +156,26 @@ function isPdfUrl(url) {
 
 /** Renders the right thumbnail for a card */
 function CardThumb({ item }) {
-  // Try BOTH URLs for direct video extraction (YouTube/Vimeo)
+  // Priority 1: Direct video extraction (YouTube/Vimeo) — check both URLs
   const thumb = extractThumbnailSync(item.live_link) || extractThumbnailSync(item.ungated_link);
-
-  if (!thumb) {
-    // OG proxy: try live_link first (if not a PDF), then ungated_link as fallback.
-    // ungated_link may be a HubSpot landing page or other web page with og:image.
-    const ogUrl = (item.live_link && !isPdfUrl(item.live_link))
-      ? item.live_link
-      : (item.ungated_link && !isPdfUrl(item.ungated_link))
-      ? item.ungated_link
-      : null;
-    if (ogUrl) return <OgThumb url={ogUrl} contentType={item.type} />;
-    return <GradientThumb contentType={item.type} />;
+  if (thumb) {
+    if (thumb.type === 'image') return <img src={thumb.src} alt="" className="feed-card-thumb" loading="lazy" />;
+    if (thumb.type === 'vimeo') return <VimeoThumb vimeoId={thumb.id} contentType={item.type} />;
   }
 
-  if (thumb.type === 'image') {
-    return <img src={thumb.src} alt="" className="feed-card-thumb" loading="lazy" />;
-  }
+  // Priority 2: PDF preview — show scaled iframe of the first page
+  const pdfUrl = isPdfUrl(item.ungated_link) ? item.ungated_link
+               : isPdfUrl(item.live_link)    ? item.live_link
+               : null;
+  if (pdfUrl) return <PdfThumb pdfUrl={pdfUrl} contentType={item.type} />;
 
-  if (thumb.type === 'vimeo') {
-    return <VimeoThumb vimeoId={thumb.id} contentType={item.type} />;
-  }
+  // Priority 3: OG image via proxy — try live_link, then ungated_link (if web pages)
+  const ogUrl = (item.live_link && !isPdfUrl(item.live_link))
+    ? item.live_link
+    : (item.ungated_link && !isPdfUrl(item.ungated_link))
+    ? item.ungated_link
+    : null;
+  if (ogUrl) return <OgThumb url={ogUrl} contentType={item.type} />;
 
   return <GradientThumb contentType={item.type} />;
 }

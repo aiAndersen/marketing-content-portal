@@ -5213,6 +5213,37 @@ body {
   justify-content: center;
 }
 
+/* PDF thumbnail — scaled iframe showing the top of the first page */
+.feed-card-thumb-pdf {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  overflow: hidden;
+}
+/* Gradient sits underneath the iframe as the loading state */
+.feed-card-thumb-pdf .feed-card-thumb-gradient {
+  position: absolute;
+  inset: 0;
+}
+.feed-card-pdf-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 850px;
+  height: 700px;
+  /* Scale to fill card width (~300px), showing the top of the PDF */
+  transform: scale(0.353);
+  transform-origin: top left;
+  border: none;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: #fff;
+}
+.feed-card-pdf-iframe.is-loaded {
+  opacity: 1;
+}
+
 .feed-card-type-overlay {
   position: absolute;
   bottom: 8px;
