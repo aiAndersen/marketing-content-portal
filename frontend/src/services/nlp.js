@@ -1434,7 +1434,7 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
 1. You MUST respond with valid JSON containing ALL required fields
 2. "quick_answer" - REQUIRED: A punchy 1-2 sentence summary. No fluff, get straight to the answer.
 3. "key_points" - REQUIRED: 3-5 bullet points highlighting the most important insights. Be specific and actionable.
-4. "recommendations" - REQUIRED: NEVER empty if content is available. Include 3-8 relevant items.
+4. "recommendations" - REQUIRED: NEVER empty if content is available. Include 3-8 relevant items. NEVER list the same title more than once — each title must be unique across all recommendations.
 5. "follow_up_questions" - REQUIRED: 3 actionable search prompts the user might want to explore next.
 
 **DUAL MODE OPERATION:**

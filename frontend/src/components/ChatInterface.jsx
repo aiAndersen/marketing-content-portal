@@ -168,11 +168,11 @@ function formatResponseText(text) {
 function StructuredResponse({ message, onFollowUp, loading, results, contentDatabase }) {
   const { quick_answer, key_points, recommendations: rawRecommendations, follow_up_questions } = message;
 
-  // Deduplicate recommendations by normalized title
+  // Deduplicate recommendations by normalized title (strip punctuation to catch near-dupes)
   const recommendations = (() => {
     const seenTitles = new Set();
     return (rawRecommendations || []).filter(rec => {
-      const norm = (rec.title || '').toLowerCase().trim();
+      const norm = (rec.title || '').toLowerCase().trim().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
       if (seenTitles.has(norm)) return false;
       seenTitles.add(norm);
       return true;
