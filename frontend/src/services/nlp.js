@@ -1513,8 +1513,10 @@ IMPORTANT RULES:
       body: JSON.stringify({
         model: selectedModel,
         messages,
-        temperature: 0.4,
-        max_tokens: 2500  // Increased to allow for more recommendations
+        // gpt-5 models require max_completion_tokens and do not accept temperature
+        ...(selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o')
+          ? { max_completion_tokens: 2500 }
+          : { temperature: 0.4, max_tokens: 2500 })
       })
     });
 
