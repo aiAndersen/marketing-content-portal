@@ -1513,10 +1513,13 @@ IMPORTANT RULES:
       body: JSON.stringify({
         model: selectedModel,
         messages,
-        // gpt-5 models require max_completion_tokens and do not accept temperature
-        ...(selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o')
-          ? { max_completion_tokens: 2500 }
-          : { temperature: 0.4, max_tokens: 2500 })
+        temperature: 0.4,
+        // gpt-5-mini is a reasoning model — reasoning tokens count toward the limit.
+        // With only 2000-2500, the model exhausts budget on reasoning with nothing left
+        // for the actual JSON output (finish_reason: "length", content: "").
+        // Use 16000 to give reasoning room. The proxy converts max_tokens →
+        // max_completion_tokens for gpt-5 models and strips temperature as needed.
+        max_tokens: 16000
       })
     });
 
@@ -1530,14 +1533,6 @@ IMPORTANT RULES:
     const content = data.choices[0]?.message?.content;
 
     if (!content) {
-      // Diagnostic: log the full raw API response so we can see why content is null
-      console.error('[Chat] NULL content from API. Full response:', JSON.stringify({
-        status: response.status,
-        choices: data.choices,
-        error: data.error,
-        model: data.model,
-        finish_reason: data.choices?.[0]?.finish_reason
-      }).substring(0, 800));
       return {
         response: "I couldn't process your request. Please try again.",
         recommendations: []
