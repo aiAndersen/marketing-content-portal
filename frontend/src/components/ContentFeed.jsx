@@ -102,7 +102,7 @@ function OgThumb({ url, contentType }) {
   useEffect(() => {
     if (src || !url) return;
     mountedRef.current = true;
-    fetch(`/api/og-preview?url=${encodeURIComponent(url)}`)
+    fetch(`/api/og-preview?url=${encodeURIComponent(url)}&_v=2`)
       .then(r => r.json())
       .then(d => {
         if (!mountedRef.current) return;
@@ -137,13 +137,17 @@ function isPdfUrl(url) {
 
 /** Renders the right thumbnail for a card */
 function CardThumb({ item }) {
-  const primaryUrl = item.live_link || item.ungated_link;
-  const thumb = extractThumbnailSync(primaryUrl);
+  // Try BOTH URLs for direct video extraction (YouTube/Vimeo)
+  const thumb = extractThumbnailSync(item.live_link) || extractThumbnailSync(item.ungated_link);
 
   if (!thumb) {
-    // For OG proxy: only use live_link (landing pages have og:image).
-    // Skip OG proxy for PDFs — they have no HTML meta tags and always return null.
-    const ogUrl = item.live_link && !isPdfUrl(item.live_link) ? item.live_link : null;
+    // OG proxy: try live_link first (if not a PDF), then ungated_link as fallback.
+    // ungated_link may be a HubSpot landing page or other web page with og:image.
+    const ogUrl = (item.live_link && !isPdfUrl(item.live_link))
+      ? item.live_link
+      : (item.ungated_link && !isPdfUrl(item.ungated_link))
+      ? item.ungated_link
+      : null;
     if (ogUrl) return <OgThumb url={ogUrl} contentType={item.type} />;
     return <GradientThumb contentType={item.type} />;
   }
