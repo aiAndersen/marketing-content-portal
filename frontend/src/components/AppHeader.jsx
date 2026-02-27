@@ -10,6 +10,7 @@ export default function AppHeader({ isMobile, stats, viewMode }) {
     chat:   'Chat Assistant',
     search: 'Content Search',
     gtm:    'Weekly GTM Report',
+    feed:   'Content Feed',
   };
 
   return (

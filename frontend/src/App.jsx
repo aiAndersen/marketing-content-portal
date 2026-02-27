@@ -3,7 +3,7 @@ import { Search, Download, ExternalLink, Loader2, Sparkles, ChevronDown, Brain, 
 import { supabaseClient } from './services/supabase';
 import { convertNaturalLanguageToQuery, rankResultsByRelevance, processConversationalQuery } from './services/nlp';
 import ChatInterface from './components/ChatInterface';
-import RecentSubmissions from './components/RecentSubmissions';
+import ContentFeed from './components/ContentFeed';
 import WeeklyGTMReport from './components/WeeklyGTMReport';
 import AppHeader from './components/AppHeader';
 import Sidebar from './components/Sidebar';
@@ -1179,8 +1179,6 @@ function App() {
             viewMode={viewMode}
             onNavigate={handleNavigate}
             onToggle={toggleSidebar}
-            isAdminMode={isAdminMode}
-            onAdminToggle={handleAdminToggle}
           />
         )}
         <div className="main-panel">
@@ -1219,9 +1217,7 @@ function App() {
           viewMode={viewMode}
           onNavigate={handleNavigate}
           onToggle={toggleSidebar}
-          isAdminMode={isAdminMode}
-          onAdminToggle={handleAdminToggle}
-        />
+          />
       )}
 
       <div className="main-panel">
@@ -1435,6 +1431,11 @@ function App() {
             <WeeklyGTMReport />
           )}
 
+          {/* Content Feed */}
+          {viewMode === 'feed' && (
+            <ContentFeed />
+          )}
+
           {error && (
             <div className="error">
               <p>Error: {error}</p>
@@ -1442,8 +1443,8 @@ function App() {
           )}
         </div>
 
-        {/* Results - hide when in GTM mode */}
-        {viewMode !== 'gtm' && (
+        {/* Results - hide when in GTM or Feed mode */}
+        {viewMode !== 'gtm' && viewMode !== 'feed' && (
         <div className="results-container" ref={resultsRef}>
           <div className="results-header">
             <h2>
@@ -1552,12 +1553,6 @@ function App() {
         )}
         </main>
       </div>
-
-      {isWide && (
-        <div className="context-panel">
-          <RecentSubmissions />
-        </div>
-      )}
 
       {isMobile && <BottomTabBar viewMode={viewMode} onNavigate={handleNavigate} />}
     </div>

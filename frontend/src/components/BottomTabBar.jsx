@@ -1,10 +1,11 @@
 import React from 'react';
-import { MessageSquare, Search, BarChart3 } from 'lucide-react';
+import { MessageSquare, Search, BarChart3, Rss } from 'lucide-react';
 
 const TABS = [
   { id: 'chat',   label: 'Chat',   Icon: MessageSquare },
   { id: 'search', label: 'Search', Icon: Search },
   { id: 'gtm',    label: 'Report', Icon: BarChart3 },
+  { id: 'feed',   label: 'Feed',   Icon: Rss },
 ];
 
 /**
