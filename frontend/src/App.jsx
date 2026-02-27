@@ -855,7 +855,7 @@ function App() {
       let contentForContext = data || [];
 
       // Prioritize HubSpot platform for 1-pager / PDF searches (more current than SL Resources)
-      const chatIsOnePagerSearch = (chatDetectedTypes || []).includes('1-Pager') || /\b(1.pager|one.pager|pdf)\b/i.test(chatQuery);
+      const chatIsOnePagerSearch = (chatDetectedTypes || []).includes('1-Pager') || /\b(1.pager|one.pager|pdf)\b/i.test(chatQueryLower);
       if (chatIsOnePagerSearch && contentForContext.length > 0) {
         const hubspotItems = contentForContext.filter(r => /hubspot/i.test(r.platform || ''));
         const otherItems = contentForContext.filter(r => !/hubspot/i.test(r.platform || ''));
