@@ -202,10 +202,11 @@ function StructuredResponse({ message, onFollowUp, loading, results, contentData
       const matchCount = recKeyWords.filter(w => itemKeyWords.includes(w)).length;
       const matchRatio = matchCount / Math.max(recKeyWords.length, 1);
       if (matchCount >= 4 && matchRatio >= 0.6) return true;
-      // Rule 4: 2+ matching words where at least one is a "strong" word (>6 chars)
-      // handles AI-paraphrased or truncated titles that share distinctive terms
+      // Rule 4: 3+ matching words where at least one is a "strong" word (>6 chars)
+      // handles AI-abbreviated titles; requires 3 matches to avoid false positives
+      // on generic shared words like "industry" + "partner"
       const strongMatch = recKeyWords.filter(w => w.length > 6 && itemKeyWords.includes(w));
-      return matchCount >= 2 && strongMatch.length >= 1;
+      return matchCount >= 3 && strongMatch.length >= 1;
     });
 
     return findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
@@ -247,7 +248,16 @@ function StructuredResponse({ message, onFollowUp, loading, results, contentData
             Recommended Content ({recommendations.length})
           </div>
           <div className="chat-rec-grid">
-            {recommendations.map((rec, idx) => {
+            {(() => {
+              const seenItemTitles = new Set();
+              return recommendations.filter(rec => {
+                const item = findContentItem(rec);
+                const resolvedTitle = (item?.title || rec.title || '').toLowerCase().trim().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
+                if (seenItemTitles.has(resolvedTitle)) return false;
+                seenItemTitles.add(resolvedTitle);
+                return true;
+              });
+            })().map((rec, idx) => {
               const item = findContentItem(rec);
               const title = item?.title || rec.title;
               const type = item?.type || rec.type || 'Content';

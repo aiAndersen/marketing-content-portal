@@ -465,8 +465,14 @@ function App() {
 
       if (error) throw error;
 
-      // Use AI to rank results by relevance
+      // Prioritize HubSpot platform for 1-pager / PDF searches (more current than SL Resources)
       let finalResults = data || [];
+      const isOnePagerSearch = finalTypes.includes('1-Pager') || /\b(1.pager|one.pager|pdf)\b/i.test(query);
+      if (isOnePagerSearch && finalResults.length > 0) {
+        const hubspotItems = finalResults.filter(r => /hubspot/i.test(r.platform || ''));
+        const otherItems = finalResults.filter(r => !/hubspot/i.test(r.platform || ''));
+        finalResults = [...hubspotItems, ...otherItems];
+      }
       let rankingExplanation = null;
       let topMatches = null;
 
@@ -847,6 +853,14 @@ function App() {
         .limit(100);
 
       let contentForContext = data || [];
+
+      // Prioritize HubSpot platform for 1-pager / PDF searches (more current than SL Resources)
+      const chatIsOnePagerSearch = (chatDetectedTypes || []).includes('1-Pager') || /\b(1.pager|one.pager|pdf)\b/i.test(chatQuery);
+      if (chatIsOnePagerSearch && contentForContext.length > 0) {
+        const hubspotItems = contentForContext.filter(r => /hubspot/i.test(r.platform || ''));
+        const otherItems = contentForContext.filter(r => !/hubspot/i.test(r.platform || ''));
+        contentForContext = [...hubspotItems, ...otherItems];
+      }
 
       // For state + customer story queries: remove content tagged with OTHER states.
       // Keep the target state's content + untagged/generic content (Landing Pages, 1-Pagers, Ebooks).
