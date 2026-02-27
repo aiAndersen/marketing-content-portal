@@ -201,7 +201,11 @@ function StructuredResponse({ message, onFollowUp, loading, results, contentData
       const itemKeyWords = getKeyWords(r.title);
       const matchCount = recKeyWords.filter(w => itemKeyWords.includes(w)).length;
       const matchRatio = matchCount / Math.max(recKeyWords.length, 1);
-      return matchCount >= 4 && matchRatio >= 0.6;
+      if (matchCount >= 4 && matchRatio >= 0.6) return true;
+      // Rule 4: 2+ matching words where at least one is a "strong" word (>6 chars)
+      // handles AI-paraphrased or truncated titles that share distinctive terms
+      const strongMatch = recKeyWords.filter(w => w.length > 6 && itemKeyWords.includes(w));
+      return matchCount >= 2 && strongMatch.length >= 1;
     });
 
     return findByFuzzyTitle(results) || findByFuzzyTitle(contentDatabase);
