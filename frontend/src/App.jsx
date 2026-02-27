@@ -992,6 +992,7 @@ function App() {
 
         // 1. Add recommended items first (in order)
         // Use same fuzzy matching as validRecommendations filter above
+        const unmatchedRecs = [];
         for (const rec of recommendations) {
           const recTitleNorm = normalizeForMatch(rec.title);
           const item = contentForContext.find(r => {
@@ -1003,6 +1004,41 @@ function App() {
           if (item && !usedTitles.has(item.title)) {
             orderedResults.push(item);
             usedTitles.add(item.title);
+          } else if (!item) {
+            // AI recommended this item but it wasn't in the DB query results
+            // (likely known via customerStoryContext) — track for secondary lookup
+            unmatchedRecs.push(rec);
+          }
+        }
+
+        // 1b. Secondary lookup: fetch any recommended items not in contentForContext
+        // The AI may recommend items it learned about from customerStoryContext
+        if (unmatchedRecs.length > 0) {
+          try {
+            const titleQueries = unmatchedRecs.map(r => r.title.substring(0, 60));
+            const { data: extraItems } = await supabaseClient
+              .from('marketing_content')
+              .select('*')
+              .or(titleQueries.map(t => `title.ilike.%${t.substring(0, 40)}%`).join(','))
+              .limit(unmatchedRecs.length * 2);
+
+            if (extraItems?.length > 0) {
+              for (const rec of unmatchedRecs) {
+                const recTitleNorm = normalizeForMatch(rec.title);
+                const found = extraItems.find(r => {
+                  const itemTitleNorm = normalizeForMatch(r.title);
+                  return itemTitleNorm === recTitleNorm ||
+                         itemTitleNorm.includes(recTitleNorm) ||
+                         recTitleNorm.includes(itemTitleNorm);
+                });
+                if (found && !usedTitles.has(found.title)) {
+                  orderedResults.push(found);
+                  usedTitles.add(found.title);
+                }
+              }
+            }
+          } catch (lookupErr) {
+            console.warn('[Chat] Secondary rec lookup failed:', lookupErr.message);
           }
         }
 
