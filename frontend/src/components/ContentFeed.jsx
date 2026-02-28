@@ -21,7 +21,7 @@ function extractThumbnailSync(url) {
 
   // YouTube
   const ytMatch = url.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
   );
   if (ytMatch) {
     return { type: 'image', src: `https://img.youtube.com/vi/${ytMatch[1]}/mqdefault.jpg` };
