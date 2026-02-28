@@ -175,10 +175,10 @@ def extract_image_url(content_obj, included: list) -> Optional[str]:
 
 
 def build_post_url(share_urn: Optional[str]) -> Optional[str]:
-    """Build the LinkedIn post URL from a share URN."""
+    """Build the LinkedIn post URL from a share, ugcPost, or activity URN."""
     if not share_urn:
         return None
-    # urn:li:share:1234567890 or urn:li:ugcPost:1234567890
+    # urn:li:share:..., urn:li:ugcPost:..., urn:li:activity:...
     if share_urn.startswith('urn:li:'):
         return f'https://www.linkedin.com/feed/update/{share_urn}/'
     return None
@@ -203,12 +203,19 @@ def parse_elements(elements: list, included: list, cutoff_ts: int, verbose: bool
             # The element may directly be an UpdateV2 or wrap one
             obj_type = elem.get('$type', '')
 
-            # Get the share/post URN
+            # Get the share/post URN — can be activity, share, or ugcPost type
             update_key = (
                 elem.get('updateMetadata', {}).get('updateKey')
                 or elem.get('entityUrn')
                 or elem.get('urn')
+                or elem.get('activityUrn')
             )
+            # Prefer share/ugcPost URN over activity URN for canonical URLs
+            for key in ('shareUrn', 'ugcPostUrn'):
+                alt = elem.get(key) or elem.get('updateMetadata', {}).get(key)
+                if alt:
+                    update_key = alt
+                    break
 
             # Published timestamp (milliseconds)
             created_time = (
