@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ExternalLink, Download, Star, Play, FileText, BookOpen,
   MonitorPlay, Newspaper, Trophy, Globe, Paperclip, Clapperboard,
-  Loader2, RefreshCw, Rss
+  Loader2, RefreshCw, Rss, Linkedin
 } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 
@@ -33,6 +33,11 @@ function extractThumbnailSync(url) {
     return { type: 'vimeo', id: vmMatch[1] };
   }
 
+  // LinkedIn media CDN — direct image URL stored by sync script
+  if (/media\.licdn\.com/i.test(url)) {
+    return { type: 'image', src: url };
+  }
+
   return null;
 }
 
@@ -49,6 +54,7 @@ const TYPE_CONFIG = {
   'Landing Page':   { Icon: Globe,        gradient: 'linear-gradient(135deg, #3EA4BB 0%, #2B7383 100%)', iconColor: '#fff' },
   'Asset':          { Icon: Paperclip,    gradient: 'linear-gradient(135deg, #D4D4D4 0%, #8E8C88 100%)', iconColor: '#1E1A12' },
   'Video Clip':     { Icon: Clapperboard, gradient: 'linear-gradient(135deg, #5EEAD4 0%, #0D9488 100%)', iconColor: '#1E1A12' },
+  'LinkedIn Post':  { Icon: Linkedin,     gradient: 'linear-gradient(135deg, #0A66C2 0%, #004182 100%)', iconColor: '#fff' },
 };
 
 const DEFAULT_CONFIG = {
@@ -185,7 +191,8 @@ function CardThumb({ item }) {
    ============================================================ */
 const ALL_TYPES = [
   'Customer Story', 'Video', 'Blog', 'Ebook', 'Webinar',
-  '1-Pager', 'Press Release', 'Award', 'Landing Page', 'Asset', 'Video Clip'
+  '1-Pager', 'Press Release', 'Award', 'Landing Page', 'Asset', 'Video Clip',
+  'LinkedIn Post',
 ];
 
 /* ============================================================
