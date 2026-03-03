@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { id: 'search', label: 'Content Search',    Icon: Search },
   { id: 'gtm',    label: 'Weekly GTM Report', Icon: BarChart3 },
   { id: 'feed',   label: 'Content Feed',      Icon: Rss },
+  { id: 'data',   label: 'Database Viewer',   Icon: Database },
 ];
 
 /**

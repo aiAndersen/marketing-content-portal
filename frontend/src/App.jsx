@@ -11,6 +11,7 @@ import BottomTabBar from './components/BottomTabBar';
 import { useDeviceLayout } from './hooks/useDeviceLayout';
 // Lazy load TerminologyAdmin to prevent cascade failures if terminology tables don't exist
 const TerminologyAdmin = lazy(() => import('./components/TerminologyAdmin'));
+const TableBrowser = lazy(() => import('./components/TableBrowser'));
 import './App.css';
 
 function App() {
@@ -1436,6 +1437,13 @@ function App() {
             <ContentFeed />
           )}
 
+          {/* Database Table Viewer */}
+          {viewMode === 'data' && (
+            <Suspense fallback={<div className="tb-loading"><Loader2 size={20} className="feed-spin" /> Loading…</div>}>
+              <TableBrowser />
+            </Suspense>
+          )}
+
           {error && (
             <div className="error">
               <p>Error: {error}</p>
@@ -1443,8 +1451,8 @@ function App() {
           )}
         </div>
 
-        {/* Results - hide when in GTM or Feed mode */}
-        {viewMode !== 'gtm' && viewMode !== 'feed' && (
+        {/* Results - hide when in GTM, Feed, or Data mode */}
+        {viewMode !== 'gtm' && viewMode !== 'feed' && viewMode !== 'data' && (
         <div className="results-container" ref={resultsRef}>
           <div className="results-header">
             <h2>

@@ -11,6 +11,7 @@ export default function AppHeader({ isMobile, stats, viewMode }) {
     search: 'Content Search',
     gtm:    'Weekly GTM Report',
     feed:   'Content Feed',
+    data:   'Database Viewer',
   };
 
   return (
