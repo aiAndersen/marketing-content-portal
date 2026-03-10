@@ -1289,7 +1289,11 @@ export async function processConversationalQuery(
     // Combine both original tags and AI-generated auto_tags
     const allTags = [c.tags, c.auto_tags].filter(Boolean).join(', ');
     const tagsStr = allTags ? `, Tags: ${allTags}` : '';
-    return `- "${c.title}" (${c.type}${c.state ? ', ' + c.state : ''}${tagsStr})${summary}`;
+    // Include transcript excerpt for video content so AI can match on spoken topics
+    const transcriptExcerpt = c.transcript && (c.type === 'Video' || c.type === 'Video Clip')
+      ? ` [Transcript: ${c.transcript.substring(0, 1500)}]`
+      : '';
+    return `- "${c.title}" (${c.type}${c.state ? ', ' + c.state : ''}${tagsStr})${summary}${transcriptExcerpt}`;
   }).join('\n');
 
   // Build different system prompts based on query type

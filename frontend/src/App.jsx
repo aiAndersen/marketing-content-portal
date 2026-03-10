@@ -864,7 +864,8 @@ function App() {
             `enhanced_summary.ilike.%${t}%`,
             `tags.ilike.%${t}%`,
             `auto_tags.ilike.%${t}%`,
-            `extracted_text.ilike.%${t}%`
+            `extracted_text.ilike.%${t}%`,
+            `transcript.ilike.%${t}%`
           ];
         });
         queryBuilder = queryBuilder.or(searchConditions.join(','));
@@ -915,6 +916,7 @@ function App() {
       const getSearchableText = (item) => [
         item.tags, item.auto_tags, item.title,
         item.enhanced_summary, item.summary, item.extracted_text,
+        item.transcript ? item.transcript.substring(0, 3000) : null,
         typeof item.keywords === 'string' ? item.keywords : JSON.stringify(item.keywords || [])
       ].filter(Boolean).join(' ').toLowerCase();
 
