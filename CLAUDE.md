@@ -372,6 +372,16 @@ For each customer story: scrapes landing page, extracts YouTube transcript, read
 - Schedule: On-demand (after new customer stories are published or edited)
 - Cost: ~$0.05-0.10/story via gpt-5.2
 
+#### /fetch-transcripts
+**Bulk-fetch full YouTube transcripts into database**
+```bash
+python scripts/fetch_youtube_transcripts.py --limit 20 -v
+```
+Fetches complete untruncated transcripts for all YouTube content (Videos and Shorts). Stores in `transcript` column. Tracks `transcript_fetched_at` to skip already-fetched records.
+- Options: `--limit N`, `--force` (re-fetch all), `--dry-run`, `-v`
+- Schedule: On-demand (after new YouTube content is added to the database)
+- Cost: Free (no AI calls — transcript API only)
+
 ### Agents (Multi-Step Orchestrators)
 
 Agents are multi-step workflows that orchestrate multiple scripts, run checks, make decisions, and provide actionable output.

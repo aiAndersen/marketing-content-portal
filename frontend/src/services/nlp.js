@@ -924,7 +924,11 @@ export async function rankResultsByRelevance(results, userQuery, maxResults = 50
     // Prefer enhanced_summary if available, otherwise use original summary
     summary: (item.enhanced_summary || item.summary || '').substring(0, 400),
     // Combine original tags with AI-generated auto_tags for comprehensive matching
-    tags: [item.tags, item.auto_tags].filter(Boolean).join(', ')
+    tags: [item.tags, item.auto_tags].filter(Boolean).join(', '),
+    // Include transcript excerpt for video content so AI can match on spoken topics
+    ...(item.transcript && (item.type === 'Video' || item.type === 'Video Clip')
+      ? { transcript_excerpt: item.transcript.substring(0, 1500) }
+      : {})
   }));
 
   try {

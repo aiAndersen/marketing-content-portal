@@ -436,7 +436,8 @@ function App() {
               `enhanced_summary.ilike.%${t}%`,
               `tags.ilike.%${t}%`,
               `auto_tags.ilike.%${t}%`,
-              `extracted_text.ilike.%${t}%`
+              `extracted_text.ilike.%${t}%`,
+              `transcript.ilike.%${t}%`
             ];
           });
           queryBuilder = queryBuilder.or(searchConditions.join(','));
@@ -456,6 +457,7 @@ function App() {
             `tags.ilike.%${t}%`,
             `auto_tags.ilike.%${t}%`,
             `extracted_text.ilike.%${t}%`,
+            `transcript.ilike.%${t}%`,
             `type.ilike.%${t}%`,
             `state.ilike.%${t}%`
           ];
@@ -473,6 +475,7 @@ function App() {
           `tags.ilike.%${searchTerm}%,` +
           `auto_tags.ilike.%${searchTerm}%,` +
           `extracted_text.ilike.%${searchTerm}%,` +
+          `transcript.ilike.%${searchTerm}%,` +
           `state.ilike.%${searchTerm}%,` +
           `type.ilike.%${searchTerm}%`
         );
