@@ -1,29 +1,24 @@
 # Marketing Content Portal - Database & Natural Language Query System
 
-A complete solution to convert your Google Sheets marketing content into a queryable database with natural language search capabilities.
+A complete solution for querying SchooLinks marketing content using natural language search, powered by OpenAI and Supabase.
 
 ## 🎯 Overview
 
-This system allows marketing reps to query your content database using natural language queries like:
+This system allows marketing reps to query the content database using natural language queries like:
 - "Show me all customer stories from Nevada"
 - "Find case studies about student engagement"
-- "What content do we have about SchoolLinks?"
+- "What content do we have about SchooLinks?"
 
 ## 🏗️ Architecture
 
-- **Database**: Supabase (PostgreSQL) - Free tier
-- **Backend API**: Supabase auto-generated REST API
-- **Frontend**: React with Vite - Hosted on Vercel/Netlify (Free)
-- **NLP**: OpenAI GPT or Anthropic Claude API for natural language processing
-- **Data Sync**: Python script to import from Google Sheets
-
-## 📋 Prerequisites
-
-1. **Supabase Account** (Free): https://supabase.com
-2. **Vercel or Netlify Account** (Free): https://vercel.com or https://netlify.com
-3. **API Key** (Choose one):
-   - OpenAI API Key: https://platform.openai.com
-   - Anthropic Claude API Key: https://console.anthropic.com
+| Layer | Technology | Location |
+|-------|-----------|----------|
+| Database | Supabase (PostgreSQL) | Cloud-hosted |
+| Frontend | React + Vite | `/frontend/` |
+| Content Submission | Vanilla JS | `/content-submission/` |
+| Backend API | Supabase REST + Vercel serverless | `/frontend/api/` |
+| AI | OpenAI GPT models | Via `/api/openai` proxy |
+| Hosting | Vercel | Auto-deploy from git |
 
 ## 🗄️ Database Connection
 
@@ -50,9 +45,12 @@ python scripts/run_qa_logging_migration.py
 ```
 
 ### Tables
-- `marketing_content` - Main content database
-- `state_context` - State-specific context for AI (HB 773, MO BOE, etc.)
-- `ai_prompt_logs` - Query logging for QA and fine-tuning
+- `marketing_content` - All content items
+- `terminology_map` - Vocabulary mappings for search
+- `ai_prompt_logs` - Query analytics and logging
+- `ai_context` - Competitive intelligence and customer story enrichment
+- `state_terminology` - State-specific acronyms (50 states)
+- `log_analysis_reports` - Analysis output from log_analyzer.py
 
 ## 🚀 Quick Start
 
@@ -73,12 +71,12 @@ python scripts/run_qa_logging_migration.py
    ```bash
    export SUPABASE_URL="your-project-url"
    export SUPABASE_KEY="your-anon-key"
-   export GOOGLE_SHEET_ID="1f8x1A16jJoi3_CM_F5hYeMs9WfxgRRIJhy9U95www7w"
    ```
 
-3. Run the import script:
+3. Run the import orchestrator:
    ```bash
-   python scripts/import_from_sheets.py
+   python scripts/import_orchestrator.py --dry-run  # Preview
+   python scripts/import_orchestrator.py            # Full import
    ```
 
 ### Step 3: Deploy the Frontend
@@ -93,7 +91,6 @@ python scripts/run_qa_logging_migration.py
    ```
    VITE_SUPABASE_URL=your-project-url
    VITE_SUPABASE_ANON_KEY=your-anon-key
-   VITE_ANTHROPIC_API_KEY=your-anthropic-key
    ```
 
 3. Test locally:
@@ -109,70 +106,78 @@ python scripts/run_qa_logging_migration.py
 
 ## 📊 Database Schema
 
-The system creates a `marketing_content` table with:
-- `id` (UUID, primary key)
-- `type` (text) - Content type (Customer Story, Video, etc.)
-- `title` (text) - Content title
-- `live_link` (text) - Published URL
-- `updated_link` (text) - Draft/updated URL
-- `platform` (text) - Platform/source
-- `summary` (text) - Full content summary
-- `state` (text) - State/region
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
+### `marketing_content` (main table)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `type` | text | Blog, Video, Customer Story, 1-Pager, Ebook, etc. |
+| `title` | text | Content title |
+| `live_link` | text | Published URL |
+| `updated_link` | text | Draft/updated URL |
+| `platform` | text | Website, YouTube, HubSpot, etc. |
+| `summary` | text | Content description |
+| `enhanced_summary` | text | AI-generated enriched summary |
+| `state` | text | US state abbreviation or "National" |
+| `tags` | text | Comma-separated keywords |
+| `keywords` | JSONB | Weighted keyword scores from enrichment |
+| `created_at` | timestamp | Record creation time |
+| `updated_at` | timestamp | Last update time |
 
 Full-text search is enabled for efficient querying.
 
 ## 🔍 How Natural Language Queries Work
 
-1. User types a question: "Show me customer stories from Nevada"
-2. The LLM (Claude/GPT) converts it to SQL:
-   ```sql
-   SELECT * FROM marketing_content 
-   WHERE type = 'Customer Story' 
-   AND state = 'NV'
-   ```
-3. Query executes on Supabase
-4. Results are formatted and displayed
+1. User types a query: "Show me customer stories from Nevada"
+2. Query complexity is detected (simple/standard/advanced)
+3. Appropriate OpenAI model is selected (gpt-4o-mini / gpt-5-mini / gpt-5.2)
+4. State-specific terminology is injected when state codes are detected
+5. Results are ranked by relevance and displayed
+
+See [docs/AI_MODEL_ROUTING.md](./docs/AI_MODEL_ROUTING.md) for full details on model routing.
 
 ## 🔄 Keeping Data in Sync
 
-### Option 1: Manual Updates
-Run the import script whenever you update the Google Sheet:
+Content is synced from multiple sources:
+
+### Automated (via GitHub Actions)
+
+| Schedule | Job |
+|----------|-----|
+| Daily 7 AM UTC | Deep content enrichment |
+| Daily 8 AM UTC | Tag hygiene cleanup |
+| Monday 9 AM UTC | Full database audit |
+| Monday 10 AM UTC | Webflow + HubSpot import |
+
+### On-Demand
+
 ```bash
-python scripts/import_from_sheets.py
-```
+# Import from all sources
+python scripts/import_orchestrator.py -v
 
-### Option 2: Scheduled Updates
-Set up a cron job or GitHub Action to run daily:
-```yaml
-# .github/workflows/sync-data.yml
-name: Sync Data
-on:
-  schedule:
-    - cron: '0 0 * * *'  # Daily at midnight
-```
+# Import from Webflow only
+python scripts/import_webflow_resources.py
 
-### Option 3: Google Apps Script Webhook
-Create a script that pushes changes to Supabase when the sheet is edited (see `scripts/google_apps_script.js`)
+# Import from HubSpot
+python scripts/import_hubspot_files.py
+```
 
 ## 💰 Cost Breakdown
 
-All services have generous free tiers:
-
 - **Supabase**: Free for 500MB database, 2GB bandwidth/month
-- **Vercel/Netlify**: Free for hobby projects, unlimited bandwidth
-- **Anthropic Claude**: $5 free credits, then ~$0.01 per query
-- **OpenAI GPT**: $5 free credits, then ~$0.002 per query
+- **Vercel**: Free for hobby projects, unlimited bandwidth
+- **OpenAI**: ~$0.002–$0.02 per query depending on complexity
 
-**Estimated monthly cost**: $0-10 depending on query volume
+**Estimated monthly cost**: ~$5–20 depending on query and enrichment volume
 
 ## 🔒 Security
 
 - Database credentials use environment variables
-- API keys never exposed in frontend code
-- Row Level Security (RLS) can be enabled in Supabase
+- API keys never exposed in frontend code (all proxied through `/api/openai`)
+- Row Level Security (RLS) enabled in Supabase
 - CORS configured for your domain only
+
+See [SECURITY.md](./SECURITY.md) for full details.
 
 ## 🔄 Development Workflow
 
@@ -188,8 +193,10 @@ npm run dev   staging    main branch
 | Environment | Branch | URL |
 |-------------|--------|-----|
 | Local | any | `localhost:5173` |
-| Staging | `staging` | `staging-*.vercel.app` |
-| Production | `main` | `*.vercel.app` |
+| Staging | `staging` | `marekting-content-portal-git-staging-schoolinks-projects.vercel.app` |
+| Production | `main` | `marekting-content-portal.vercel.app` |
+
+**Note:** The Vercel project name is `marekting-content-portal` (intentional typo in project name — do not "fix" it).
 
 ### Quick Start for Developers
 
@@ -222,24 +229,24 @@ See [VERCEL-SETUP.md](./VERCEL-SETUP.md) for detailed Vercel configuration and t
 
 ## 📱 Features
 
-- ✅ Natural language search
+- ✅ Natural language search with multi-model AI routing
 - ✅ Filter by content type, state, platform
 - ✅ Full-text search across all fields
 - ✅ Export results to CSV
 - ✅ Direct links to content
 - ✅ Mobile-responsive design
-- ✅ Real-time updates
+- ✅ Content submission portal (standalone app at `/content-submission/`)
+- ✅ AI-assisted form with voice input and URL extraction
+- ✅ Weekly GTM report generation
+- ✅ Automated content enrichment pipeline
 
 ## 🤖 AI Self-Improvement Agent
 
-The portal includes a powerful self-improvement agent that continuously improves the Content Submission AI Assistant.
+The portal includes a self-improvement agent that continuously improves the Content Submission AI Assistant.
 
 ### Quick Start
 
 ```bash
-# Install dependencies
-pip install openai psycopg2-binary python-dotenv
-
 # Set environment variables
 export OPENAI_API_KEY="your-openai-key"
 export DATABASE_URL="your-database-url"
@@ -267,60 +274,56 @@ python3 scripts/submission_agent_improver.py
 3. **SYSTEM_PROMPT Quality** - AI analysis of prompt effectiveness
 4. **Terminology Gaps** - Suggests new search term mappings
 
-### When to Run
-
-- After bulk content imports
-- Weekly maintenance
-- When search quality degrades
-- Before major releases
-
-## 🛠️ Customization
-
-### Adding New Columns
-1. Update `backend/schema.sql`
-2. Modify `scripts/import_from_sheets.py`
-3. Update frontend components
-
-### Changing the UI
-All frontend code is in `frontend/src/`. The main components are:
-- `App.jsx` - Main application
-- `QueryInterface.jsx` - Natural language input
-- `ResultsDisplay.jsx` - Results table
-
-### Using Different LLM
-Switch between Claude and OpenAI by changing the API endpoint in `frontend/src/services/nlp.js`
-
 ## 📚 File Structure
 
 ```
 marketing-content-portal/
-├── backend/
-│   ├── schema.sql              # Database schema
-│   └── setup-instructions.md   # Detailed Supabase setup
-├── frontend/
+├── README.md
+├── CLAUDE.md                       # Claude Code configuration + agent skills
+├── SECURITY.md                     # Security architecture
+├── VERCEL-SETUP.md                 # Vercel deployment config
+├── PROJECT_SUMMARY.md              # Executive summary
+├── frontend/                       # React app (main portal)
 │   ├── src/
-│   │   ├── App.jsx
-│   │   ├── components/
-│   │   ├── services/
-│   │   └── styles/
-│   ├── package.json
-│   └── vite.config.js
-├── scripts/
-│   ├── import_from_sheets.py   # Data import script
-│   ├── requirements.txt        # Python dependencies
-│   └── google_apps_script.js   # Optional: real-time sync
-├── docs/
-│   ├── API.md                  # API documentation
-│   └── DEPLOYMENT.md           # Deployment guide
-└── README.md                   # This file
+│   │   ├── components/             # React components
+│   │   └── services/               # nlp.js, terminology.js
+│   └── api/                        # Vercel serverless functions
+│       ├── openai.js               # OpenAI proxy
+│       ├── whisper.js              # Voice transcription
+│       ├── hubspot-deals.js        # HubSpot integration
+│       └── webflow-webhook.js      # Webflow CMS sync
+├── content-submission/             # Standalone vanilla JS app
+│   ├── ai-assistant.js             # AI content parser
+│   ├── app.js                      # Form handling + GTM reports
+│   └── index.html                  # Entry point
+├── scripts/                        # Python automation (41 scripts)
+│   ├── import_orchestrator.py      # Unified import workflow
+│   ├── maintenance_orchestrator.py # Full maintenance cycle
+│   ├── enrich_deep.py              # Deep enrichment pipeline
+│   ├── audit_content_tags.py       # Database audit
+│   ├── log_analyzer.py             # Search log analysis
+│   ├── health_monitor.py           # System health monitoring
+│   └── requirements.txt
+├── docs/                           # Documentation
+│   ├── AI_MODEL_ROUTING.md         # Model selection strategy
+│   ├── USER_GUIDE.md               # End-user search guide
+│   ├── DEPLOYMENT.md               # Deployment guide
+│   ├── ENRICHMENT_GUIDE.md         # Content enrichment process
+│   └── Competitive_Positioning_Analysis.md
+├── backend/                        # SQL migrations
+├── supabase/migrations/            # Database migrations
+└── SchooLinks Baseline Context/    # AI context files
+    ├── SL_baseline_context_AIAgents.md
+    └── State Specific Context/     # State legislation guides
 ```
 
 ## 🤝 Support
 
 For issues or questions:
 1. Check the documentation in the `docs/` folder
-2. Review Supabase docs: https://supabase.com/docs
-3. Check Vercel docs: https://vercel.com/docs
+2. Review [CLAUDE.md](./CLAUDE.md) for agent skills and automation
+3. Review Supabase docs: https://supabase.com/docs
+4. Review Vercel docs: https://vercel.com/docs
 
 ## 📄 License
 
@@ -328,4 +331,4 @@ MIT License - feel free to modify and use for your organization
 
 ---
 
-Built with ❤️ for efficient marketing content discovery
+Built with ❤️ for efficient SchooLinks marketing content discovery

@@ -94,7 +94,7 @@ gpt-5-mini → gpt-4o-mini
 |-----------|---------|---------|
 | Competitor names | `naviance`, `xello`, `ccgi`, `scoir`, `majorclarity`, `powerschool`, `kuder`, `youscience` | "How do we compare to Xello?" |
 | Comparison language | `vs`, `versus`, `compared to`, `better than`, `difference`, `alternative` | "SchooLinks vs Naviance" |
-| Why/How about SchooLinks | `why should`, `how does schoolinks`, `what makes` | "Why should districts choose SchooLinks?" |
+| Why/How about SchooLinks | `why should`, `how does SchooLinks`, `what makes` | "Why should districts choose SchooLinks?" |
 | State legislation | `HB 773`, `SB 3`, `RIDE framework`, `CCMR`, `ICAP`, `ECAP`, `PGP`, `ILP`, `HSBP` | "Texas HB 773 compliance" |
 | ROI with specifics | `roi/cost/savings` + `proof/evidence/data` | "ROI proof points for counselor time savings" |
 | Multi-feature queries | `and/plus/with` + `tracking/compliance/engagement` | "FAFSA tracking and family engagement" |
